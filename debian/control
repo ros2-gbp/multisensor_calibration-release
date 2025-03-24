@@ -1,0 +1,13 @@
+Source: ros-jazzy-multisensor-calibration
+Section: misc
+Priority: optional
+Maintainer: Miguel Granero <miguel.granero@iosb.fraunhofer.de>
+Build-Depends: debhelper (>= 9.0.0), libtinyxml2-dev, qt5-qmake, qtbase5-dev, ros-jazzy-ament-cmake, ros-jazzy-ament-lint-auto <!nocheck>, ros-jazzy-ament-lint-common <!nocheck>, ros-jazzy-cv-bridge, ros-jazzy-geometry-msgs, ros-jazzy-image-transport, ros-jazzy-multisensor-calibration-interface, ros-jazzy-pcl-conversions, ros-jazzy-pcl-ros, ros-jazzy-rclcpp, ros-jazzy-rclcpp-components, ros-jazzy-rviz-common, ros-jazzy-sensor-msgs, ros-jazzy-std-msgs, ros-jazzy-tf2, ros-jazzy-tf2-ros, ros-jazzy-urdf, ros-jazzy-visualization-msgs, ros-jazzy-ros-workspace
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-jazzy-multisensor-calibration
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libqt5core5a, libqt5gui5, libqt5widgets5, libtinyxml2-dev, ros-jazzy-cv-bridge, ros-jazzy-geometry-msgs, ros-jazzy-image-transport, ros-jazzy-multisensor-calibration-interface, ros-jazzy-pcl-conversions, ros-jazzy-pcl-ros, ros-jazzy-rclcpp, ros-jazzy-rclcpp-components, ros-jazzy-rviz-common, ros-jazzy-sensor-msgs, ros-jazzy-std-msgs, ros-jazzy-tf2, ros-jazzy-tf2-ros, ros-jazzy-urdf, ros-jazzy-visualization-msgs, ros-jazzy-ros-workspace
+Description: Collection of methods and applications to calibrate multi-sensor-systems, e.g.
+ camera to LiDAR, LiDAR to LiDAR, and LiDAR to vehicle.

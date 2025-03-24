@@ -1,0 +1,29 @@
+ros-jazzy-multisensor-calibration (2.0.1-1bookworm) bookworm; urgency=high
+
+  * refactor: remove compilation warnings
+  * fix: remove deprecated pointer type
+  * Contributors: Miguel Granero
+
+ -- Miguel Granero <miguel.granero@iosb.fraunhofer.de>  Sun, 23 Mar 2025 23:00:00 -0000
+
+ros-jazzy-multisensor-calibration (2.0.0-1bookworm) bookworm; urgency=high
+
+  * feat: Port of multisensor_calibration to ROS2 Jazzy.
+  * Contributors: Miguel Granero
+
+ -- Miguel Granero <miguel.granero@iosb.fraunhofer.de>  Wed, 19 Feb 2025 23:00:00 -0000
+
+ros-jazzy-multisensor-calibration (1.0.0-1bookworm) bookworm; urgency=high
+
+  * Extrinsic Camera-LiDAR Calibration
+  * Extrinsic Camera-Reference Calibration
+  * Extrinsic LiDAR-LiDAR Calibration
+  * Extrinsic LiDAR-Reference Calibration
+  * Extrinsic LiDAR-Vehicle Calibration (prototype)
+  * Calibration Configurator
+  * Documentation
+  Contributors: Boitumelo Ruf, Christian Frese, Raphael Hagmanns, Tom Schmidt, Mohamed Youssef Hanini
+
+ -- Miguel Granero <miguel.granero@iosb.fraunhofer.de>  Mon, 17 Feb 2025 23:00:00 -0000
+
+

@@ -38,14 +38,6 @@ cd ../../
 </li>
 
 <li>
-(OPTIONAL) Clone and build 'small_gicp'.<br>If this step is omitted, it will be executed as part of the first build.
-
-```bash
-src/multisensor_calibration/thirdparty/clone_small_gicp.sh && src/multisensor_calibration/thirdparty/build_and_install_small_gicp.sh
-```
-</li>
-
-<li>
 Initialize `rosdep` and install dependencies:
 
 ```bash
@@ -104,14 +96,6 @@ git clone https://github.com/FraunhoferIOSB/multisensor_calibration.git
 </li>
 
 <li>
-(OPTIONAL) Clone and build 'small_gicp'.<br>If this step is omitted, it will be executed as part of the first build.
-
-```bash
-src/multisensor_calibration/thirdparty/clone_small_gicp.sh && src/multisensor_calibration/thirdparty/build_and_install_small_gicp.sh
-```
-</li>
-
-<li>
 Initialize `rosdep` and install dependencies:
 
 ```bash
@@ -156,6 +140,6 @@ Apart from the basic catkin requirements, `multisensor_calibration` depends on t
 - [**PCL**](https://pointclouds.org/)
 - [**OpenCV**](https://opencv.org/)
 - [**Qt**](https://www.qt.io/)
-- [**small_gicp**](https://github.com/koide3/small_gicp): This is included as git-submodule and will be cloned and built on the first build. It is licensed under the MIT-License.
+- [**small_gicp**](https://github.com/koide3/small_gicp): The package `small_gicp_vendor` wraps this library to make it available for other ROS components. This is a common practice for third-party libraries without available deb sources. It is licensed under the MIT-License.
 - [**OpenMP**](https://www.openmp.org/) (optional): This is used to parallelize and speed up the processing of each point in the point cloud. If not found by CMake the processing will be done sequentially.
 - [**Doxygen**](https://www.doxygen.nl/) (optional): If available, this Doxygen documentation will be build automatically.

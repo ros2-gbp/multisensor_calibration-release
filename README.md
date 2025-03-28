@@ -21,7 +21,7 @@ The software is licensed under the new [BSD 3-Clause license](license.md). If yo
 } 
 ```
 
-The `multisensor_calibration` is released as an official package for ROS 2 and can be installed with apt-get.
+The `multisensor_calibration` can currently only be installed manually. We are actively working towards releasing it as an official package for ROS 2 so it can be installed with apt.
 Since ROS 1 is soon end-of-life, there will be no official release for ROS 1.
 However, there is a version of the source code available for ROS 1 under the branch [noetic](https://github.com/FraunhoferIOSB/multisensor_calibration/tree/noetic).
 
@@ -66,7 +66,7 @@ Further requirements:
 - [**PCL**](https://pointclouds.org/)
 - [**OpenCV**](https://opencv.org/)
 - [**Qt**](https://www.qt.io/)
-- [**small_gicp**](https://github.com/koide3/small_gicp): This is included as git-submodule and will be cloned and built on the first build. It is licensed under the MIT-License.
+- [**small_gicp**](https://github.com/koide3/small_gicp): TThe package `small_gicp_vendor` wraps this library to make it available for other ROS components. This is a common practice for third-party libraries without available deb sources. It is licensed under the MIT-License.
 - [**OpenMP**](https://www.openmp.org/) (optional): This is used to parallelize and speed up the processing of each point in the point cloud. If not found by CMake the processing will be done sequentially.
 - [**Doxygen**](https://www.doxygen.nl/) (optional): If available, this Doxygen documentation will be build automatically.
 
@@ -78,13 +78,7 @@ Further requirements:
     git clone https://github.com/FraunhoferIOSB/multisensor_calibration.git
     ```
 
-2. (OPTIONAL) Clone and build 'small_gicp'.<br>If this step is omitted, it will be executed as part of the first build.
-
-    ```bash
-    cd multisensor_calibration && ./thirdparty/clone_small_gicp.sh && ./thirdparty/build_and_install_small_gicp.sh
-    ```
-
-3. Initialize `rosdep` and install dependencies:
+2. Initialize `rosdep` and install dependencies:
 
     ```bash
     sudo rosdep init
@@ -92,7 +86,7 @@ Further requirements:
     rosdep install --from-paths src -y --ignore-src
     ```
 
-4. Run `colcon` to build from source:<br>
+3. Run `colcon` to build from source:<br>
 To build in 'Debug' mode add `-DCMAKE_BUILD_TYPE=Debug` to catkin command.
 If 'CMAKE_BUILD_TYPE' omitted, multisensor_calibration will be build in 'Release' mode.
 

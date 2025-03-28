@@ -1,0 +1,22 @@
+ros-jazzy-multisensor-calibration-interface (2.0.2-1noble) noble; urgency=high
+
+  * fix: export library target
+  * fix: read version from package.xml and not from git
+  * Contributors: Miguel Granero
+
+ -- Miguel Granero <miguel.granero@iosb.fraunhofer.de>  Thu, 27 Mar 2025 23:00:00 -0000
+
+ros-jazzy-multisensor-calibration-interface (2.0.1-1noble) noble; urgency=high
+
+
+
+ -- Miguel Granero <miguel.granero@iosb.fraunhofer.de>  Sun, 23 Mar 2025 23:00:00 -0000
+
+ros-jazzy-multisensor-calibration-interface (2.0.0-1noble) noble; urgency=high
+
+  * feat: Port of multisensor_calibration to ROS2 Jazzy.
+  * Contributors: Miguel Granero
+
+ -- Miguel Granero <miguel.granero@iosb.fraunhofer.de>  Wed, 19 Feb 2025 23:00:00 -0000
+
+

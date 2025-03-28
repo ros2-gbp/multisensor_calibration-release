@@ -29,14 +29,23 @@
 
 cmake_minimum_required(VERSION 3.9.0)
 
-# get version from git
-include(${CMAKE_CURRENT_LIST_DIR}/../cmake/gitversion.cmake)
+# get version from package.xml
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.xml" package_xml_str)
+
+# Extract project version.
+set(VERSION_STR "0.0.0")
+if(NOT package_xml_str MATCHES "<version>([0-9]+.[0-9]+.[0-9]+)</version>")
+  message(FATAL_ERROR "Could not parse project version from package manifest (aborting)")
+else()
+  set(VERSION_STR ${CMAKE_MATCH_1})
+endif()
+string(REPLACE "." ";" VERSION_LIST "${VERSION_STR}")
+list(GET VERSION_LIST 0 VERSION_MAJOR)
+list(GET VERSION_LIST 1 VERSION_MINOR)
+list(GET VERSION_LIST 2 VERSION_PATCH)
 
 # set project name (ros convention --> lower case)
 project(multisensor_calibration_interface VERSION ${VERSION_STR})
-
-# configure package.xml, doxyfile
-configure_file("${CMAKE_CURRENT_LIST_DIR}/package.xml.in" "${CMAKE_CURRENT_LIST_DIR}/package.xml" @ONLY)
 
 # initialize as iosb_package
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)

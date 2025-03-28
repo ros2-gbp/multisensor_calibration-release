@@ -29,14 +29,23 @@
 
 cmake_minimum_required(VERSION 3.9.0)
 
-# get version from git
-include(${CMAKE_CURRENT_LIST_DIR}/../cmake/gitversion.cmake)
+# get version from package.xml
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.xml" package_xml_str)
+
+# Extract project version.
+set(VERSION_STR "0.0.0")
+if(NOT package_xml_str MATCHES "<version>([0-9]+.[0-9]+.[0-9]+)</version>")
+  message(FATAL_ERROR "Could not parse project version from package manifest (aborting)")
+else()
+  set(VERSION_STR ${CMAKE_MATCH_1})
+endif()
+string(REPLACE "." ";" VERSION_LIST "${VERSION_STR}")
+list(GET VERSION_LIST 0 VERSION_MAJOR)
+list(GET VERSION_LIST 1 VERSION_MINOR)
+list(GET VERSION_LIST 2 VERSION_PATCH)
 
 # set project name (ros convention --> lower case)
 project(multisensor_calibration VERSION ${VERSION_STR})
-
-# configure package.xml
-configure_file("${CMAKE_CURRENT_LIST_DIR}/package.xml.in" "${CMAKE_CURRENT_LIST_DIR}/package.xml" @ONLY)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 message(STATUS "Setting build type to Release as none was specified.")
@@ -92,18 +101,8 @@ find_package(OpenCV REQUIRED COMPONENTS
     core
     calib3d
 )
-
-# if small gicp does not exist clone and build
-if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/../thirdparty/install/small_gicp/lib/cmake/small_gicp")
-    execute_process(COMMAND bash ${CMAKE_CURRENT_LIST_DIR}/../thirdparty/clone_small_gicp.sh)
-    execute_process(COMMAND bash ${CMAKE_CURRENT_LIST_DIR}/../thirdparty/build_and_install_small_gicp.sh)
-endif()
-
-find_package(small_gicp REQUIRED
-             PATHS "${CMAKE_CURRENT_LIST_DIR}/../thirdparty/install/small_gicp/lib/cmake/small_gicp")
-file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../.git/modules/thirdparty/small_gicp/HEAD" 
-             SMALL_GICP_HEAD_COMMIT_HASH
-         )
+find_package(small_gicp_vendor REQUIRED)
+find_package(small_gicp REQUIRED)
          
 
 find_package(OpenMP)
@@ -135,7 +134,7 @@ set(COMMON_COMPILE_DEFINITIONS
     -DEXTRINSIC_LIDAR_REFERENCE_CALIBRATION_TARGET=4
     -DEXTRINSIC_LIDAR_VEHICLE_CALIBRATION_TARGET=5
     -DMULTI_THREADED
-    -DSMALL_GICP_HEAD_COMMIT_HASH="${SMALL_GICP_HEAD_COMMIT_HASH}"
+    -DSMALL_GICP_HEAD_COMMIT_HASH="${small_gicp_VERSION}"
 )
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     set(COMMON_COMPILE_DEFINITIONS ${COMMON_COMPILE_DEFINITIONS}
@@ -159,6 +158,8 @@ set(DEPENDENCIES
   geometry_msgs
   visualization_msgs
   multisensor_calibration_interface
+  small_gicp
+  small_gicp_vendor
 )
 
 
@@ -211,7 +212,13 @@ set(QRC_SRC_FILES  # With ROS1 qt5_add_resources was used instead of set
     "${CMAKE_CURRENT_LIST_DIR}/resources/about.qrc"
 )
 
+############################################################################
+## TARGETS
+############################################################################
+
+######################################
 # library target
+######################################
 set(LIBRARY_TARGET_NAME ${PROJECT_NAME})
 add_library(${LIBRARY_TARGET_NAME} SHARED
     ${LIBRARY_MOC_HEADER_FILES}
@@ -237,10 +244,15 @@ target_compile_definitions(${LIBRARY_TARGET_NAME} PRIVATE
 ament_target_dependencies(${LIBRARY_TARGET_NAME} 
     ${DEPENDENCIES}
 )
+ament_export_targets(export_${LIBRARY_TARGET_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(${DEPENDENCIES})
+
 rclcpp_components_register_nodes(${LIBRARY_TARGET_NAME} "multisensor_calibration::visualizers::PointCloud2PointCloudDistanceNode")
 rclcpp_components_register_nodes(${LIBRARY_TARGET_NAME} "multisensor_calibration::visualizers::PointCloud2ImageNode")
 
+######################################
 # extrinsic_camera_lidar_calibration
+######################################
 set(CAMERA_LIDAR_CALIB_NODE_TARGET_NAME extrinsic_camera_lidar_calibration)
 add_executable(${CAMERA_LIDAR_CALIB_NODE_TARGET_NAME} 
     src/nodes/CalibrationNode.cpp    
@@ -259,7 +271,9 @@ target_link_libraries(${CAMERA_LIDAR_CALIB_NODE_TARGET_NAME}
     Qt${QT_VERSION_MAJOR}::Gui
 )
 
+######################################
 # extrinsic_camera_reference_calibration
+######################################
 set(CAMERA_REFERENCE_CALIB_NODE_TARGET_NAME extrinsic_camera_reference_calibration)
 add_executable(${CAMERA_REFERENCE_CALIB_NODE_TARGET_NAME} 
     src/nodes/CalibrationNode.cpp    
@@ -278,7 +292,9 @@ target_link_libraries(${CAMERA_REFERENCE_CALIB_NODE_TARGET_NAME}
     Qt${QT_VERSION_MAJOR}::Gui
 )
 
+######################################
 # extrinsic_lidar_lidar_calibration
+######################################
 set(LIDAR_LIDAR_CALIB_NODE_TARGET_NAME extrinsic_lidar_lidar_calibration)
 add_executable(${LIDAR_LIDAR_CALIB_NODE_TARGET_NAME} 
     src/nodes/CalibrationNode.cpp
@@ -297,7 +313,9 @@ target_link_libraries(${LIDAR_LIDAR_CALIB_NODE_TARGET_NAME}
     Qt${QT_VERSION_MAJOR}::Gui
 )
 
+######################################
 # extrinsic_lidar_reference_calibration
+######################################
 set(LIDAR_REFERENCE_CALIB_NODE_TARGET_NAME extrinsic_lidar_reference_calibration)
 add_executable(${LIDAR_REFERENCE_CALIB_NODE_TARGET_NAME} 
     src/nodes/CalibrationNode.cpp    
@@ -316,7 +334,9 @@ target_link_libraries(${LIDAR_REFERENCE_CALIB_NODE_TARGET_NAME}
     Qt${QT_VERSION_MAJOR}::Gui
 )
 
+######################################
 # multi_sensor_calibration
+######################################
 set(MULTI_SENSOR_CALIB_NODE_TARGET_NAME multi_sensor_calibration)
 add_executable(${MULTI_SENSOR_CALIB_NODE_TARGET_NAME} 
     src/nodes/CalibrationNode.cpp
@@ -334,7 +354,9 @@ target_link_libraries(${MULTI_SENSOR_CALIB_NODE_TARGET_NAME}
     Qt${QT_VERSION_MAJOR}::Gui
 )
 
+######################################
 # initialize_robot_workspace
+######################################
 set(INIT_ROBOT_WS_NODE_TARGET_NAME initialize_robot_workspace)
 add_executable(${INIT_ROBOT_WS_NODE_TARGET_NAME} 
     src/nodes/InitializeRobotWsNode.cpp 
@@ -350,8 +372,9 @@ target_compile_definitions(${INIT_ROBOT_WS_NODE_TARGET_NAME} PRIVATE
     -DTARGET_NAME="${INIT_ROBOT_WS_NODE_TARGET_NAME}"
 )
 
-
+######################################
 # publish_pointcloud
+######################################
 set(PUB_PC_NODE_TARGET_NAME publish_point_cloud)
 add_executable(${PUB_PC_NODE_TARGET_NAME} src/nodes/PublishPointCloudNode.cpp)
 target_compile_definitions(${PUB_PC_NODE_TARGET_NAME} PRIVATE 
@@ -362,7 +385,9 @@ target_link_libraries(${PUB_PC_NODE_TARGET_NAME}
     ${LIBRARY_TARGET_NAME} 
 )
 
+######################################
 # aggregate_point_cloud
+######################################
 set(AGGREGATE_PC_NODE_TARGET_NAME aggregate_point_cloud)
 add_executable(${AGGREGATE_PC_NODE_TARGET_NAME} src/nodes/AggregatePointCloudNode.cpp)
 target_compile_definitions(${AGGREGATE_PC_NODE_TARGET_NAME} PRIVATE 
@@ -373,9 +398,13 @@ target_link_libraries(${AGGREGATE_PC_NODE_TARGET_NAME}
     ${LIBRARY_TARGET_NAME} 
 )
 
-# Installs
+############################################################################
+## INSTALLS
+############################################################################
 
-install(TARGETS ${LIBRARY_NAME}
+install(
+  TARGETS ${LIBRARY_TARGET_NAME}
+  EXPORT export_${LIBRARY_TARGET_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -398,7 +427,9 @@ install(DIRECTORY include/ DESTINATION include/)
 install(DIRECTORY cfg DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
-# Tests
+############################################################################
+## TESTS
+############################################################################
 
 if(BUILD_TESTING)
 #   find_package(ament_cmake_copyright REQUIRED)

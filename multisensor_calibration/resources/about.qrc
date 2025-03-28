@@ -3,6 +3,6 @@
     <qresource prefix="/">
         <file>../package.xml</file>
         <file>../CHANGELOG.rst</file>
-        <file>../../LICENSE</file>
+        <file>../LICENSE</file>
     </qresource>
 </RCC>

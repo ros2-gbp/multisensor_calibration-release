@@ -2,6 +2,13 @@
 Changelog for package multisensor_calibration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.0.2 (2025-03-28)
+------------------
+* feat: create small_gicp_vendor package
+* fix: export library target
+* fix: read version from package.xml and not from git
+* Contributors: Miguel Granero
+
 2.0.1 (2025-03-24)
 ------------------
 * refactor: remove compilation warnings
@@ -23,4 +30,4 @@ Changelog for package multisensor_calibration
 * Calibration Configurator
 * Documentation
 
-Contributors: Boitumelo Ruf, Christian Frese, Raphael Hagmanns, Tom Schmidt, Mohamed Youssef Hanini
+Contributors: Boitumelo Ruf, Miguel Granero, Christian Frese, Raphael Hagmanns, Tom Schmidt

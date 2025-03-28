@@ -2,6 +2,11 @@
 Changelog for package multisensor_calibration_interface
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.0.3 (2025-03-28)
+------------------
+* feat: add LICENSE file to single packages
+* Contributors: Miguel Granero
+
 2.0.2 (2025-03-28)
 ------------------
 * fix: export library target

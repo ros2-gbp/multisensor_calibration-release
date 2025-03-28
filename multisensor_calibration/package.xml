@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>multisensor_calibration</name>
-  <version>2.0.1</version>
+  <version>2.0.2</version>
   <description>
     Collection of methods and applications to calibrate multi-sensor-systems, e.g.
     camera to LiDAR, LiDAR to LiDAR, and LiDAR to vehicle. 
@@ -34,13 +34,15 @@
   <depend>tinyxml2</depend>
   <depend>urdf</depend>
   <depend>rviz_common</depend>
+  <depend>multisensor_calibration_interface</depend>
+
+  <depend>small_gicp_vendor</depend>
 
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>visualization_msgs</depend>
 
-  <depend>multisensor_calibration_interface</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

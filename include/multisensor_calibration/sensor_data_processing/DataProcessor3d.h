@@ -33,7 +33,7 @@
 #include <rclcpp/publisher.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/service.hpp>
-#include <tf2/LinearMath/Transform.h>
+#include <tf2/LinearMath/Transform.hpp>
 
 // PCL
 #include <pcl/filters/filter.h>
@@ -160,7 +160,7 @@ class DataProcessor3d : public SensorDataProcessorBase<pcl::PointCloud<InputPoin
      * @param[in, out] ipNode Pointer to node to which the service is to be initialized.
      * @return True, if successful. False otherwise.
      */
-    virtual bool initializePublishers(rclcpp::Node* ipNode);
+    virtual bool initializePublishers(rclcpp::Node* ipNode) override;
 
     /**
      * @brief Method to initialize services
@@ -168,7 +168,7 @@ class DataProcessor3d : public SensorDataProcessorBase<pcl::PointCloud<InputPoin
      * @param[in, out] ipNode Pointer to node to which the service is to be initialized.
      * @return True, if successful. False otherwise.
      */
-    virtual bool initializeServices(rclcpp::Node* ipNode);
+    virtual bool initializeServices(rclcpp::Node* ipNode) override;
 
     /**
      * @overload

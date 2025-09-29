@@ -31,11 +31,7 @@
 
 // Std
 #include <filesystem>
-#include <tuple>
 #include <vector>
-
-// boost
-#include <boost/smart_ptr/shared_ptr.hpp>
 
 // ROS
 #include <rclcpp/logger.hpp>

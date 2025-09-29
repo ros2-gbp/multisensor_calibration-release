@@ -5,7 +5,7 @@
  *
  **********************************************************************/
 
-#include "../../include/multisensor_calibration/io/Workspace.h"
+#include "multisensor_calibration/io/Workspace.h"
 
 // Std
 #include <map>
@@ -13,9 +13,6 @@
 
 // Qt
 #include <QFile>
-
-// multisensor_calibration
-#include "../../include/multisensor_calibration/common/utils.hpp"
 
 namespace multisensor_calibration
 {

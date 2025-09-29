@@ -5,16 +5,12 @@
  *
  **********************************************************************/
 
-#include "../../include/multisensor_calibration/calibration/ExtrinsicCameraLidarCalibration.h"
+#include "multisensor_calibration/calibration/ExtrinsicCameraLidarCalibration.h"
 
 // Std
-#include <algorithm>
 #include <cstring>
-#include <fstream>
 #include <functional>
 #include <future>
-#include <random>
-#include <thread>
 
 // Qt
 #include <QFile>
@@ -40,8 +36,8 @@
 #include <Eigen/Eigenvalues>
 
 // multisensor_calibration
-#include "../../include/multisensor_calibration/common/common.h"
-#include "../../include/multisensor_calibration/common/utils.hpp"
+#include "multisensor_calibration/common/common.h"
+#include "multisensor_calibration/common/utils.hpp"
 
 namespace multisensor_calibration
 {
@@ -817,7 +813,7 @@ bool ExtrinsicCameraLidarCalibration::setDynamicParameter(const rclcpp::Paramete
     {
         return true;
     }
-    else if (registrationParams_.tryToSetParameter(iParameter))
+    if (registrationParams_.tryToSetParameter(iParameter))
     {
         return true;
     }

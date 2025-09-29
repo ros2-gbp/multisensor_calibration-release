@@ -30,16 +30,14 @@
 #define MULTISENSORCALIBRATION_EXTRINSIC2D3DCALIBRATIONBASE_H
 
 // ROS
-#include <message_filters/sync_policies/approximate_time.h>
-#include <message_filters/sync_policies/exact_time.h>
+#include <message_filters/sync_policies/approximate_time.hpp>
+#include <message_filters/sync_policies/exact_time.hpp>
 
 // PCL
 #include <pcl/point_cloud.h>
 
 // multisensor_calibration
 #include "../sensor_data_processing/CameraDataProcessor.h"
-#include "../sensor_data_processing/LidarDataProcessor.h"
-#include "../sensor_data_processing/ReferenceDataProcessor3d.h"
 #include "ExtrinsicCalibrationBase.h"
 #include <multisensor_calibration_interface/srv/camera_intrinsics.hpp>
 

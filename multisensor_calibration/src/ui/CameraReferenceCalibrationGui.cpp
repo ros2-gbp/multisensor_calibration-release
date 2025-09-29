@@ -5,12 +5,10 @@
  *
  **********************************************************************/
 
-#include "../include/multisensor_calibration/ui/CameraReferenceCalibrationGui.h"
+#include "multisensor_calibration/ui/CameraReferenceCalibrationGui.h"
 
 // Std
-#include <future>
 #include <string>
-#include <thread>
 
 // ROS
 #include <tf2/utils.hpp>
@@ -21,8 +19,7 @@
 #include <QObject>
 
 // multisensor_calibration
-#include "../../include/multisensor_calibration/common/common.h"
-#include "../../include/multisensor_calibration/common/utils.hpp"
+#include "multisensor_calibration/common/common.h"
 #include <multisensor_calibration_interface/srv/camera_intrinsics.hpp>
 #include <multisensor_calibration_interface/srv/sensor_extrinsics.hpp>
 

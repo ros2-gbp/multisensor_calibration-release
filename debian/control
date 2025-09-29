@@ -1,0 +1,13 @@
+Source: ros-kilted-small-gicp-vendor
+Section: misc
+Priority: optional
+Maintainer: miguel <Miguel.Granero@iosb.fraunhofer.de>
+Build-Depends: debhelper (>= 9.0.0), ros-kilted-ament-cmake, ros-kilted-ament-cmake-vendor-package, ros-kilted-ros-workspace
+Homepage: https://github.com/koide3/small_gicp
+Standards-Version: 3.9.2
+
+Package: ros-kilted-small-gicp-vendor
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-kilted-ros-workspace
+Description: Vendor package for small_gicp.
+ This is just a wrapper to provide ExternalProject build

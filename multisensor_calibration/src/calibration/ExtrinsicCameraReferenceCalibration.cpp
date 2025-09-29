@@ -5,7 +5,7 @@
  *
  **********************************************************************/
 
-#include "../../include/multisensor_calibration/calibration/ExtrinsicCameraReferenceCalibration.h"
+#include "multisensor_calibration/calibration/ExtrinsicCameraReferenceCalibration.h"
 
 // Std
 #include <cstring>
@@ -17,7 +17,7 @@
 
 // ROS
 #include <sensor_msgs/msg/camera_info.hpp>
-#include <tf2/LinearMath/Transform.h>
+#include <tf2/LinearMath/Transform.hpp>
 
 // PCL
 #include <pcl/conversions.h>
@@ -37,8 +37,8 @@
 #include <Eigen/Eigenvalues>
 
 // multisensor_calibration
-#include "../../include/multisensor_calibration/common/common.h"
-#include "../../include/multisensor_calibration/common/utils.hpp"
+#include "multisensor_calibration/common/common.h"
+#include "multisensor_calibration/common/utils.hpp"
 
 namespace multisensor_calibration
 {

@@ -5,7 +5,7 @@
  *
  **********************************************************************/
 
-#include "../../include/multisensor_calibration/sensor_data_processing/SensorDataProcessorBase.h"
+#include "multisensor_calibration/sensor_data_processing/SensorDataProcessorBase.h"
 
 // Std
 #include <cmath>
@@ -15,13 +15,13 @@
 #include <Eigen/Geometry>
 
 // ROS
-#include <tf2/LinearMath/Transform.h>
+#include <tf2/LinearMath/Transform.hpp>
 
 // OpenCV
 #include <opencv2/core/eigen.hpp>
 
 // multisensor_calibration
-#include "../../include/multisensor_calibration/common/utils.hpp"
+#include "multisensor_calibration/common/utils.hpp"
 
 namespace multisensor_calibration
 {

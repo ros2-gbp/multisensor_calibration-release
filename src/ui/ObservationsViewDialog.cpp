@@ -5,11 +5,7 @@
  *
  **********************************************************************/
 
-#include "../../include/multisensor_calibration/ui/ObservationsViewDialog.h"
-
-// Std
-#include <future>
-#include <thread>
+#include "multisensor_calibration/ui/ObservationsViewDialog.h"
 
 // Qt
 #include <QAction>
@@ -22,7 +18,7 @@
 #include <QRegExpValidator>
 
 // multisensor_calibration
-#include "../../include/multisensor_calibration/ui/CalibrationGuiBase.h"
+#include "multisensor_calibration/ui/CalibrationGuiBase.h"
 #include "ui_ObservationsViewDialog.h"
 #include <multisensor_calibration/common/utils.hpp>
 #include <multisensor_calibration_interface/srv/add_marker_observations.hpp>

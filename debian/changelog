@@ -1,0 +1,22 @@
+ros-kilted-small-gicp-vendor (2.0.4-1bookworm) bookworm; urgency=high
+
+
+
+ -- miguel <Miguel.Granero@iosb.fraunhofer.de>  Sun, 28 Sep 2025 22:00:00 -0000
+
+ros-kilted-small-gicp-vendor (2.0.3-1bookworm) bookworm; urgency=high
+
+  * fix: fix license name in package.xml
+  * feat: add LICENSE file to single packages
+  * Contributors: Miguel Granero
+
+ -- miguel <Miguel.Granero@iosb.fraunhofer.de>  Thu, 27 Mar 2025 23:00:00 -0000
+
+ros-kilted-small-gicp-vendor (2.0.2-1bookworm) bookworm; urgency=high
+
+  * feat: create small_gicp_vendor package
+  * Contributors: Miguel Granero
+
+ -- miguel <Miguel.Granero@iosb.fraunhofer.de>  Thu, 27 Mar 2025 23:00:00 -0000
+
+

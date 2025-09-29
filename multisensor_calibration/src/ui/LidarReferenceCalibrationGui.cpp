@@ -5,12 +5,10 @@
  *
  **********************************************************************/
 
-#include "../include/multisensor_calibration/ui/LidarReferenceCalibrationGui.h"
+#include "multisensor_calibration/ui/LidarReferenceCalibrationGui.h"
 
 // Std
-#include <future>
 #include <string>
-#include <thread>
 
 // Qt
 #include <QCoreApplication>
@@ -22,8 +20,7 @@
 #include <tf2/utils.hpp>
 
 // multisensor_calibration
-#include "../../include/multisensor_calibration/common/utils.hpp"
-#include "../include/multisensor_calibration/common/common.h"
+#include "multisensor_calibration/common/common.h"
 #include <multisensor_calibration_interface/srv/sensor_extrinsics.hpp>
 
 using namespace multisensor_calibration_interface::srv;

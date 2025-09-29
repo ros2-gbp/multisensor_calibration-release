@@ -1,5 +1,19 @@
 # multisensor_calibration
 
+### Contents:
+
+- [multisensor\_calibration](#multisensor_calibration)
+    - [Contents:](#contents)
+    - [Continuous Integration:](#continuous-integration)
+  - [Getting Started](#getting-started)
+    - [Requirements](#requirements)
+    - [Build](#build)
+  - [Usage](#usage)
+    - [Documentation](#documentation)
+
+
+------------------------
+
 An actively maintained universal calibration toolbox for assisted, target-based multi-sensor calibration with ROS 1 and ROS 2 support. 
 It provides a variety of methods and applications to calibrate complex multi-sensor systems, e.g.
 
@@ -21,7 +35,13 @@ The software is licensed under the new [BSD 3-Clause license](license.md). If yo
 } 
 ```
 
-The `multisensor_calibration` can currently only be installed manually. We are actively working towards releasing it as an official package for ROS 2 so it can be installed with apt.
+The `multisensor_calibration` can be installed with apt:
+```bash
+sudo apt install ros-$ROS_DISTRO-multisensor-calibration
+```
+
+Or manually. If you want to compile and use locally, see [Getting Started](#getting-started).
+
 Since ROS 1 is soon end-of-life, there will be no official release for ROS 1.
 However, there is a version of the source code available for ROS 1 under the branch [noetic](https://github.com/FraunhoferIOSB/multisensor_calibration/tree/noetic).
 
@@ -39,25 +59,13 @@ However, there is a version of the source code available for ROS 1 under the bra
 
 ------------------------
 
-### Contents:
-
-- [multisensor\_calibration](#multisensor_calibration)
-    - [Continuous Integration:](#continuous-integration)
-    - [Contents:](#contents)
-  - [Getting Started](#getting-started)
-    - [Requirements](#requirements)
-    - [Build](#build)
-    - [Run](#run)
-    - [Documentation](#documentation)
-
-
-------------------------
-
 ## Getting Started
+
+If you have already installed the package with apt, this section can be skipped.
 
 ### Requirements
 
-Basic catkin requirements can be installed by calling following command from the top of the catkin workspace:
+Basic requirements can be installed by calling following command from the top of the ROS workspace:
 
     rosdep install -y -r --from-paths src --ignore-src
 
@@ -94,7 +102,9 @@ If 'CMAKE_BUILD_TYPE' omitted, multisensor_calibration will be build in 'Release
     MAKEFLAGS='-j 8' colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
     ```
 
-### Run
+## Usage
+
+Run the following launch file from the package.
 
 ```bash
 ros2 launch multisensor_calibration multi_sensor_calib_example.launch.py

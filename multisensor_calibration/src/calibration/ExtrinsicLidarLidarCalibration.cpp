@@ -5,7 +5,7 @@
  *
  **********************************************************************/
 
-#include "../../include/multisensor_calibration/calibration/ExtrinsicLidarLidarCalibration.h"
+#include "multisensor_calibration/calibration/ExtrinsicLidarLidarCalibration.h"
 
 // Std
 #include <functional>
@@ -17,7 +17,7 @@
 #include <pcl/visualization/pcl_visualizer.h>
 
 // ROS
-#include <tf2/LinearMath/Transform.h>
+#include <tf2/LinearMath/Transform.hpp>
 
 // Qt
 #include <QFile>
@@ -26,8 +26,8 @@
 #include <small_gicp/registration/registration_helper.hpp>
 
 // multisensor_calibration
-#include "../../include/multisensor_calibration/common/common.h"
-#include "../../include/multisensor_calibration/common/utils.hpp"
+#include "multisensor_calibration/common/common.h"
+#include "multisensor_calibration/common/utils.hpp"
 #include <multisensor_calibration_interface/msg/calibration_result.hpp>
 
 namespace multisensor_calibration
@@ -880,7 +880,7 @@ bool ExtrinsicLidarLidarCalibration::setDynamicParameter(const rclcpp::Parameter
     {
         return true;
     }
-    else if (registrationParams_.tryToSetParameter(iParameter))
+    if (registrationParams_.tryToSetParameter(iParameter))
     {
         return true;
     }

@@ -1,0 +1,55 @@
+ros-kilted-multisensor-calibration (2.0.4-2noble) noble; urgency=high
+
+  * refactor: Minor style changes and deprecation removals
+  * Prepare for Kilted + Rolling Release
+  * Contributors: Miguel Granero
+
+ -- Miguel Granero <miguel.granero@iosb.fraunhofer.de>  Mon, 29 Sep 2025 00:00:00 -0000
+
+ros-kilted-multisensor-calibration (2.0.3-2noble) noble; urgency=high
+
+  * refactor: remove unused rviz config files
+  * fix: set LICENSE path to own package for bin packaging
+  * feat: add LICENSE file to single packages
+  * Contributors: Miguel Granero
+
+ -- Miguel Granero <miguel.granero@iosb.fraunhofer.de>  Fri, 28 Mar 2025 00:00:00 -0000
+
+ros-kilted-multisensor-calibration (2.0.2-2noble) noble; urgency=high
+
+  * feat: create small_gicp_vendor package
+  * fix: export library target
+  * fix: read version from package.xml and not from git
+  * Contributors: Miguel Granero
+
+ -- Miguel Granero <miguel.granero@iosb.fraunhofer.de>  Fri, 28 Mar 2025 00:00:00 -0000
+
+ros-kilted-multisensor-calibration (2.0.1-2noble) noble; urgency=high
+
+  * refactor: remove compilation warnings
+  * fix: remove deprecated pointer type
+  * Contributors: Miguel Granero
+
+ -- Miguel Granero <miguel.granero@iosb.fraunhofer.de>  Mon, 24 Mar 2025 00:00:00 -0000
+
+ros-kilted-multisensor-calibration (2.0.0-2noble) noble; urgency=high
+
+  * feat: Port of multisensor_calibration to ROS2 Jazzy.
+  * Contributors: Miguel Granero
+
+ -- Miguel Granero <miguel.granero@iosb.fraunhofer.de>  Thu, 20 Feb 2025 00:00:00 -0000
+
+ros-kilted-multisensor-calibration (1.0.0-2noble) noble; urgency=high
+
+  * Extrinsic Camera-LiDAR Calibration
+  * Extrinsic Camera-Reference Calibration
+  * Extrinsic LiDAR-LiDAR Calibration
+  * Extrinsic LiDAR-Reference Calibration
+  * Extrinsic LiDAR-Vehicle Calibration (prototype)
+  * Calibration Configurator
+  * Documentation
+  Contributors: Boitumelo Ruf, Miguel Granero, Christian Frese, Raphael Hagmanns, Tom Schmidt
+
+ -- Miguel Granero <miguel.granero@iosb.fraunhofer.de>  Tue, 18 Feb 2025 00:00:00 -0000
+
+

@@ -26,8 +26,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef MULTISENSORCALIBRATION_UI_EXTRINSICCAMERALIDARCONFIGWIDGET_H
-#define MULTISENSORCALIBRATION_UI_EXTRINSICCAMERALIDARCONFIGWIDGET_H
+#pragma once
 
 // Std
 #include <map>
@@ -49,15 +48,15 @@ namespace multisensor_calibration
 
 namespace Ui
 {
-class ExtrinsicCameraLidarConfigWidget;
+class ExtrinsicCameraCameraConfigWidget;
 }
 
 /**
  * @ingroup ui
- * @brief Widget holding the configuration options for the extrinsic camera lidar calibration.
+ * @brief Widget holding the configuration options for the extrinsic camera calibration.
  * This is part of the calibration configurator of the multi_sensor_calibration node.
  */
-class ExtrinsicCameraLidarConfigWidget : public QWidget
+class ExtrinsicCameraCameraConfigWidget : public QWidget
 {
     Q_OBJECT
 
@@ -65,16 +64,16 @@ class ExtrinsicCameraLidarConfigWidget : public QWidget
 
   public:
     /**
-     * @brief Construct a new Extrinsic Camera Lidar Config Widget.
+     * @brief Construct a new Extrinsic Camera Config Widget.
      *
      * @param[in] parent Parent Widget
      */
-    ExtrinsicCameraLidarConfigWidget(QWidget* parent = nullptr);
+    ExtrinsicCameraCameraConfigWidget(QWidget* parent = nullptr);
 
     /**
-     * @brief Destroy the Extrinsic Camera Lidar Config Widget.
+     * @brief Destroy the Extrinsic Camera Config Widget.
      */
-    ~ExtrinsicCameraLidarConfigWidget();
+    ~ExtrinsicCameraCameraConfigWidget();
 
     /**
      * @brief Clear contents of options.
@@ -126,7 +125,6 @@ class ExtrinsicCameraLidarConfigWidget : public QWidget
      */
     std::unordered_map<std::string, std::string> getStringTypedCalibrationOptions();
 
-
     void setTopicList(std::map<std::string, std::vector<std::string>> topicList);
 
   private:
@@ -169,7 +167,7 @@ class ExtrinsicCameraLidarConfigWidget : public QWidget
 
   private:
     /// Pointer to UI
-    Ui::ExtrinsicCameraLidarConfigWidget* ui;
+    Ui::ExtrinsicCameraCameraConfigWidget* ui;
 
     /// Directory of robot workspace, holding robot specific calibration workspaces.
     QDir robotWorkspaceDir_;
@@ -185,4 +183,3 @@ class ExtrinsicCameraLidarConfigWidget : public QWidget
 };
 
 } // namespace multisensor_calibration
-#endif // MULTISENSORCALIBRATION_UI_EXTRINSICCAMERALIDARCONFIGWIDGET_H

@@ -11,14 +11,20 @@
 #include <QApplication>
 #include <QMessageBox>
 #include <QObject>
+#include <cstddef>
+#include <type_traits>
 
 // multisensor_calibration
 #include "multisensor_calibration/common/common.h"
+#include "multisensor_calibration/ui/CalibrationGuiBase.h"
 #include "multisensor_calibration/ui/CameraLidarCalibrationGui.h"
+#include "multisensor_calibration/ui/CameraCameraCalibrationGui.h"
 #include "multisensor_calibration/ui/CameraReferenceCalibrationGui.h"
+#include "multisensor_calibration/ui/GuiBase.h"
 #include "multisensor_calibration/ui/LidarLidarCalibrationGui.h"
 #include "multisensor_calibration/ui/LidarReferenceCalibrationGui.h"
 
+#include "multisensor_calibration/calibration/ExtrinsicCameraCameraCalibration.h"
 #include "multisensor_calibration/calibration/ExtrinsicCameraLidarCalibration.h"
 #include "multisensor_calibration/calibration/ExtrinsicCameraReferenceCalibration.h"
 #include "multisensor_calibration/calibration/ExtrinsicLidarLidarCalibration.h"
@@ -113,16 +119,30 @@ void MultiSensorCalibrationGui::runExtrinsicLidarReferenceCalibration()
 }
 
 //==================================================================================================
+
+void MultiSensorCalibrationGui::runExtrinsicCameraCameraCalibration()
+{
+    /* @TODO: Guidance, Gui for Camera-Camera */
+    runExtrinsicCalibration<
+      multisensor_calibration::ExtrinsicCameraCameraCalibration,
+      multisensor_calibration::GuidedCameraLidarTargetPlacementNode,
+      CameraCameraCalibrationGui>();
+}
+
+//==================================================================================================
 template <typename CalibrationType, typename GuidanceType, typename GuiType>
 typename std::enable_if<
-  std::is_base_of<CalibrationGuiBase, GuiType>::value &&
-    std::is_base_of<CalibrationBase, CalibrationType>::value &&
-    std::is_base_of<GuidanceBase, GuidanceBase>::value,
+  TYPE_INHERTIS_FROM_OR_NULLTYPE(CalibrationGuiBase, GuiType) &&
+    TYPE_INHERITS(CalibrationBase, CalibrationType) &&
+    TYPE_INHERTIS_FROM_OR_NULLTYPE(GuidanceBase, GuidanceBase),
   void>::type
 MultiSensorCalibrationGui::runExtrinsicCalibration()
 {
     if (!pExecutor_)
         return;
+
+    constexpr bool hasGuidance = TYPE_INHERITS(GuidanceBase, GuidanceType);
+    constexpr bool hasGui      = TYPE_INHERITS(GuiBase, GuiType);
 
     std::vector<rclcpp::Parameter> parameterVector = {};
 
@@ -139,14 +159,18 @@ MultiSensorCalibrationGui::runExtrinsicCalibration()
     auto options = rclcpp::NodeOptions(nodeOptions_);
     options.parameter_overrides(parameterVector);
     options.use_intra_process_comms(true);
+
 #ifdef MULTI_THREADED
-    guidanceThread_ = std::thread(
-      [](rclcpp::NodeOptions options, std::string appTitle)
-      {
-          auto guidanceNode = std::make_shared<GuidanceType>(appTitle, options);
-          rclcpp::spin(guidanceNode);
-      },
-      options, appTitle_);
+    if constexpr (hasGuidance)
+    {
+        guidanceThread_ = std::thread(
+          [](rclcpp::NodeOptions options, std::string appTitle)
+          {
+              auto guidanceNode = std::make_shared<GuidanceType>(appTitle, options);
+              rclcpp::spin(guidanceNode);
+          },
+          options, appTitle_);
+    }
 
     calibrationThread_ = std::thread(
       [](rclcpp::NodeOptions options, std::string appTitle)
@@ -157,17 +181,23 @@ MultiSensorCalibrationGui::runExtrinsicCalibration()
       options, appTitle_);
 
 #else
-    auto pGuidance    = std::make_shared<GuidanceType>(appTitle_, options);
+    if constexpr (hasGuidance)
+    {
+        auto pGuidance = std::make_shared<GuidanceType>(appTitle_, options);
+        pExecutor_->add_node(pGuidance);
+        pGuidance_ = pGuidance;
+    }
     auto pCalibration = std::make_shared<CalibrationType>(appTitle_, options);
-    pExecutor_->add_node(pGuidance);
     pExecutor_->add_node(pCalibration);
-    pGuidance_    = pGuidance;
     pCalibration_ = pCalibration;
 #endif
 
     //--- load gui
-    pCalibrationGui_ = std::make_shared<GuiType>(appTitle_, multisensor_calibration::GUI_SUB_NAMESPACE);
-    pCalibrationGui_->init(pExecutor_, nodeOptions_);
+    if constexpr (hasGui)
+    {
+        pCalibrationGui_ = std::make_shared<GuiType>(appTitle_, multisensor_calibration::GUI_SUB_NAMESPACE);
+        pCalibrationGui_->init(pExecutor_, nodeOptions_);
+    }
 }
 
 //==================================================================================================
@@ -197,6 +227,12 @@ void MultiSensorCalibrationGui::handleConfigDialogAccepted()
     case EXTRINSIC_LIDAR_REFERENCE_CALIBRATION:
     {
         runExtrinsicLidarReferenceCalibration();
+    }
+    break;
+
+    case STEREO_CAMERA_CALIBRATION:
+    {
+        runExtrinsicCameraCameraCalibration();
     }
     break;
     }

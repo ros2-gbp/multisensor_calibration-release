@@ -26,8 +26,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef MULTISENSORCALIBRATION_EXTRINSIC3D3DCALIBRATIONBASE_H
-#define MULTISENSORCALIBRATION_EXTRINSIC3D3DCALIBRATIONBASE_H
+#pragma once
 
 // ROS
 #include <message_filters/sync_policies/approximate_time.hpp>
@@ -60,36 +59,19 @@ class Extrinsic3d3dCalibrationBase
   : public ExtrinsicCalibrationBase<SrcDataProcessorT, RefDataProcessorT>
 {
 
-    //--- TYPEDEFS ---//
-  protected:
-    typedef message_filters::sync_policies::ApproximateTime<
-      InputCloud_Message_T, InputCloud_Message_T>
-      CloudCloudApproxSync;
-
-    typedef message_filters::sync_policies::ExactTime<
-      InputCloud_Message_T, InputCloud_Message_T>
-      CloudCloudExactSync;
-
-    //--- METHOD DECLARATION ---/
-
+    //==============================================================================
+    // CONSTRUCTION / DESTRUCTION
+    //==============================================================================
   public:
-    /**
-     * @brief Default constructor is deleted.
-     */
     Extrinsic3d3dCalibrationBase() = delete;
 
-    /**
-     * @brief Initialization constructor.
-     *
-     * @param[in] type Type of calibration
-     */
     Extrinsic3d3dCalibrationBase(ECalibrationType type);
 
-    /**
-     * @brief Destructor
-     */
-    virtual ~Extrinsic3d3dCalibrationBase();
+    virtual ~Extrinsic3d3dCalibrationBase() = default;
 
+    //==============================================================================
+    // METHODS
+    //==============================================================================
   protected:
     /**
      * @brief Compute extrinsic pose from 3D correspondences.
@@ -139,5 +121,3 @@ class Extrinsic3d3dCalibrationBase
 };
 
 } // namespace multisensor_calibration
-
-#endif // MULTISENSORCALIBRATION_EXTRINSIC3D3DCALIBRATIONBASE_H

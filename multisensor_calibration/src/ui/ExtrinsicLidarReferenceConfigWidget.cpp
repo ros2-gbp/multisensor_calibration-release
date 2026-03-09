@@ -15,6 +15,7 @@
 #include <QDebug>
 
 // multisensor_calibration
+#include "multisensor_calibration/common/utils.hpp"
 #include "multisensor_calibration/io/Workspace.h"
 #include "ui_ExtrinsicLidarReferenceConfigWidget.h"
 
@@ -231,21 +232,11 @@ void ExtrinsicLidarReferenceConfigWidget::populateComboBoxesFromAvailableTfs()
 }
 
 //==================================================================================================
-inline auto getTopicList()
-{
-    auto node        = rclcpp::Node::make_shared("topic_info_node");
-    auto topics_info = node->get_topic_names_and_types();
-
-    return topics_info;
-}
-
-//==================================================================================================
 void ExtrinsicLidarReferenceConfigWidget::populateComboBoxesFromAvailableTopics()
 {
 
     //--- populate combo boxes from available ros topics
-    auto topicInfos = getTopicList();
-    for (auto topicInfo : topicInfos)
+    for (auto topicInfo : topicList)
     {
         if (std::find(topicInfo.second.begin(), topicInfo.second.end(), "sensor_msgs/msg/PointCloud2") !=
             topicInfo.second.end())
@@ -303,6 +294,13 @@ void ExtrinsicLidarReferenceConfigWidget::setCalibrationOptionsFromSettings()
 void ExtrinsicLidarReferenceConfigWidget::handleSelectedSensorsChanged()
 {
     setCalibrationOptionsFromSettings();
+}
+
+//==================================================================================================
+
+void ExtrinsicLidarReferenceConfigWidget::setTopicList(std::map<std::string, std::vector<std::string>> topicList)
+{
+    this->topicList = topicList;
 }
 
 } // namespace multisensor_calibration

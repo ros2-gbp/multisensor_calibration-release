@@ -26,8 +26,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef MULTISENSORCALIBRATION_COMMON_H
-#define MULTISENSORCALIBRATION_COMMON_H
+#pragma once
 
 // Std
 #include <string>
@@ -63,6 +62,15 @@
 
 #if !defined(VERSION_PATCH)
 #define VERSION_PATCH 0
+#endif
+
+#ifdef DEBUG_BUILD
+#define DEBUG_RUNTIME_ASSERT(cond, message)  \
+    {                                  \
+        (assert((cond) && (message))); \
+    }
+#else
+#define DEBUG_RUNTIME_ASSERT(cond, message)
 #endif
 
 namespace multisensor_calibration
@@ -210,42 +218,39 @@ static const int DEFAULT_SYNC_QUEUE_SIZE = 100;
 
 //--- ENUMS ---//
 
-/**
- * @ingroup calibration
- * @brief Enum representing type of calibration.
- */
+/* XMacro: Reduces readability but improves the maintenance */
+#define CALIBRATION_TYPE_TABLE(X)                                                                                     \
+    X(EXTRINSIC_CAMERA_LIDAR_CALIBRATION, "extrinsic_camera_lidar_calibration", "Extrinsic Camera-LiDAR")             \
+    X(EXTRINSIC_LIDAR_LIDAR_CALIBRATION, "extrinsic_lidar_lidar_calibration", "Extrinsic LiDAR-LiDAR")                \
+    X(EXTRINSIC_CAMERA_REFERENCE_CALIBRATION, "extrinsic_camera_reference_calibration", "Extrinsic Camera-Reference") \
+    X(EXTRINSIC_LIDAR_REFERENCE_CALIBRATION, "extrinsic_lidar_reference_calibration", "Extrinsic LiDAR-Reference")    \
+    X(EXTRINSIC_LIDAR_VEHICLE_CALIBRATION, "extrinsic_lidar_vehicle_calibration", "Extrinsic LiDAR-Vehicle")          \
+    X(STEREO_CAMERA_CALIBRATION, "stereo_camera_calibration", "Extrinsic Camera-Camera")
+
 enum ECalibrationType
 {
-    EXTRINSIC_CAMERA_LIDAR_CALIBRATION = 0, ///< Extrinsic Camera-LiDAR calibration.
-    EXTRINSIC_LIDAR_LIDAR_CALIBRATION,      ///< Extrinsic LiDAR-LiDAR calibration.
-    EXTRINSIC_CAMERA_REFERENCE_CALIBRATION, ///< Extrinsic Camera-Reference calibration.
-    EXTRINSIC_LIDAR_REFERENCE_CALIBRATION,  ///< Extrinsic LiDAR-Reference calibration.
-    EXTRINSIC_LIDAR_VEHICLE_CALIBRATION     ///< Extrinsic LiDAR-Vehicle calibration.
+#define X(name, node, str) name,
+    CALIBRATION_TYPE_TABLE(X)
+#undef X
 };
 
-/// Map convert a value inside the ECalibrationType enum to a node name of type string.
 static const std::unordered_map<ECalibrationType, std::string> CALIB_TYPE_2_NODE_NAME{
-  {EXTRINSIC_CAMERA_LIDAR_CALIBRATION, "extrinsic_camera_lidar_calibration"},
-  {EXTRINSIC_LIDAR_LIDAR_CALIBRATION, "extrinsic_lidar_lidar_calibration"},
-  {EXTRINSIC_CAMERA_REFERENCE_CALIBRATION, "extrinsic_camera_reference_calibration"},
-  {EXTRINSIC_LIDAR_REFERENCE_CALIBRATION, "extrinsic_lidar_reference_calibration"},
-  {EXTRINSIC_LIDAR_VEHICLE_CALIBRATION, "extrinsic_lidar_vehicle_calibration"}};
+#define X(name, node, str) {name, node},
+  CALIBRATION_TYPE_TABLE(X)
+#undef X
+};
 
-/// Map convert a value inside the ECalibrationType enum to a string.
 static const std::unordered_map<ECalibrationType, std::string> CALIB_TYPE_2_STR{
-  {EXTRINSIC_CAMERA_LIDAR_CALIBRATION, "Extrinsic Camera-LiDAR"},
-  {EXTRINSIC_LIDAR_LIDAR_CALIBRATION, "Extrinsic LiDAR-LiDAR"},
-  {EXTRINSIC_CAMERA_REFERENCE_CALIBRATION, "Extrinsic Camera-Reference"},
-  {EXTRINSIC_LIDAR_REFERENCE_CALIBRATION, "Extrinsic LiDAR-Reference"},
-  {EXTRINSIC_LIDAR_VEHICLE_CALIBRATION, "Extrinsic LiDAR-Vehicle"}};
+#define X(name, node, str) {name, str},
+  CALIBRATION_TYPE_TABLE(X)
+#undef X
+};
 
-/// Map to a string to value inside the ECalibrationType enum.
 static const std::unordered_map<std::string, ECalibrationType> STR_2_CALIB_TYPE{
-  {"Extrinsic Camera-LiDAR", EXTRINSIC_CAMERA_LIDAR_CALIBRATION},
-  {"Extrinsic LiDAR-LiDAR", EXTRINSIC_LIDAR_LIDAR_CALIBRATION},
-  {"Extrinsic Camera-Reference", EXTRINSIC_CAMERA_REFERENCE_CALIBRATION},
-  {"Extrinsic LiDAR-Reference", EXTRINSIC_LIDAR_REFERENCE_CALIBRATION},
-  {"Extrinsic LiDAR-Vehicle", EXTRINSIC_LIDAR_VEHICLE_CALIBRATION}};
+#define X(name, node, str) {str, name},
+  CALIBRATION_TYPE_TABLE(X)
+#undef X
+};
 
 /// Enum indicating the state of the input image.
 enum EImageState
@@ -268,5 +273,3 @@ static const std::unordered_map<std::string, EImageState> STR_2_IMG_STATE{
   {"STEREO_RECTIFIED", STEREO_RECTIFIED}};
 
 } // namespace multisensor_calibration
-
-#endif // MULTISENSORCALIBRATION_COMMON_H

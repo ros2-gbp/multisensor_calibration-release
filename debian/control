@@ -1,0 +1,12 @@
+Source: ros-kilted-multisensor-calibration-interface
+Section: misc
+Priority: optional
+Maintainer: Miguel Granero <miguel.granero@iosb.fraunhofer.de>
+Build-Depends: debhelper (>= 9.0.0), ros-kilted-ament-cmake, ros-kilted-builtin-interfaces, ros-kilted-geometry-msgs, ros-kilted-rosidl-default-generators, ros-kilted-sensor-msgs, ros-kilted-std-msgs, ros-kilted-ros-workspace, ros-kilted-rosidl-typesupport-fastrtps-c, ros-kilted-rosidl-typesupport-fastrtps-cpp
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-kilted-multisensor-calibration-interface
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-kilted-builtin-interfaces, ros-kilted-geometry-msgs, ros-kilted-rosidl-default-runtime, ros-kilted-sensor-msgs, ros-kilted-std-msgs, ros-kilted-ros-workspace
+Description: Messages and service definitions for the multisensor_calibration package.

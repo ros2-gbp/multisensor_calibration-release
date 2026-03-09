@@ -45,10 +45,43 @@ CalibrationBase::CalibrationBase(ECalibrationType type) :
 }
 
 //==================================================================================================
-CalibrationBase::~CalibrationBase()
-{
-}
 
+bool CalibrationBase::init(rclcpp::Node* ipNode)
+{
+    if (ipNode == nullptr)
+        return false;
+    //--- do base class initialization
+    logger_ = ipNode->get_logger();
+    CalibrationBase::initializeTfListener(ipNode);
+
+    //--- setup launch and dynamic parameters
+    setupLaunchParameters(ipNode);
+    setupDynamicParameters(ipNode);
+
+    //--- register parameter change callback
+    pParameterCallbackHandle_ = ipNode->add_on_set_parameters_callback(
+      std::bind(&CalibrationBase::handleDynamicParameterChange, this,
+                std::placeholders::_1));
+
+    //--- read launch parameters
+    isInitialized_ = readLaunchParameters(ipNode);
+
+    //--- if reading of launch parameters has returned with false, i.e. if error occurred, return.
+    if (isInitialized_ == false)
+        return false;
+
+    //--- initialize services
+    isInitialized_ &= initializeServices(ipNode);
+
+    //--- initialize workspace objects
+    isInitialized_ &= initializeWorkspaceObjects();
+
+    //--- create and start calibration workflow;
+    isInitialized_ &= initializeAndStartSensorCalibration(ipNode);
+
+    return isInitialized_;
+}
+//==================================================================================================
 //==================================================================================================
 bool CalibrationBase::initializeAndStartSensorCalibration(rclcpp::Node* ipNode)
 {
@@ -234,7 +267,7 @@ bool CalibrationBase::readLaunchParameters(const rclcpp::Node* ipNode)
     std::string targetFileStr = ipNode->get_parameter("target_config_file").as_string();
     if (targetFileStr.empty() || !fs::exists(targetFileStr))
     {
-        RCLCPP_ERROR(logger_, "Target configuration file path is empty or does not consist: %s",
+        RCLCPP_ERROR(logger_, "Target configuration file path is empty or does not consist: [ %s ]",
                      targetFileStr.c_str());
         return false;
     }

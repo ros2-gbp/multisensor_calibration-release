@@ -50,17 +50,48 @@ ExtrinsicCalibrationBase<SrcDataProcessorT, RefDataProcessorT>::
 
 //==================================================================================================
 template <class SrcDataProcessorT, class RefDataProcessorT>
-ExtrinsicCalibrationBase<SrcDataProcessorT, RefDataProcessorT>::~ExtrinsicCalibrationBase()
-{
-}
-
-//==================================================================================================
-template <class SrcDataProcessorT, class RefDataProcessorT>
 bool ExtrinsicCalibrationBase<SrcDataProcessorT, RefDataProcessorT>::initializePublishers(
   rclcpp::Node* ipNode)
 {
     pCalibResultPub_ = ipNode->create_publisher<CalibrationResult_Message_T>(
       "~/" + CALIB_RESULT_TOPIC_NAME, 10);
+
+    return true;
+}
+
+//==================================================================================================
+template <class SrcDataProcessorT, class RefDataProcessorT>
+bool ExtrinsicCalibrationBase<SrcDataProcessorT, RefDataProcessorT>::onRequestRemoveObservation(
+  const std::shared_ptr<interf::srv::RemoveLastObservation::Request> ipReq,
+  std::shared_ptr<interf::srv::RemoveLastObservation::Response> opRes)
+{
+    UNUSED_VAR(ipReq);
+
+    //--- if there is a calibration to be removed, remove all observations from this iteration
+    if (calibrationItrCnt_ > 1)
+    {
+
+        //--- get ownership of mutex
+        std::lock_guard<std::mutex> guard(dataProcessingMutex_);
+
+        calibrationItrCnt_--;
+
+        pSrcDataProcessor_->removeCalibIteration(calibrationItrCnt_);
+        pRefDataProcessor_->removeCalibIteration(calibrationItrCnt_);
+
+        opRes->is_accepted = true;
+        opRes->msg         = "Last observation successfully removed! "
+                             "Remaining number of observations: " +
+                     std::to_string(pSrcDataProcessor_->getNumCalibIterations()) + " (src), " +
+                     std::to_string(pRefDataProcessor_->getNumCalibIterations()) + " (ref).";
+    }
+    else
+    {
+        opRes->is_accepted = false;
+        opRes->msg         = "No observation available to be removed!";
+    }
+
+    RCLCPP_INFO(logger_, "%s", opRes->msg.c_str());
 
     return true;
 }
@@ -426,6 +457,12 @@ template void ExtrinsicCalibrationBase<CameraDataProcessor, LidarDataProcessor>:
 template void ExtrinsicCalibrationBase<CameraDataProcessor, LidarDataProcessor>::
   removeCornerObservationsWithoutCorrespondence<uint, cv::Point3f>(
     const std::set<uint>&, std::set<uint>&, std::vector<cv::Point3f>& ioSrcObs) const;
+template void ExtrinsicCalibrationBase<CameraDataProcessor, CameraDataProcessor>::
+  removeCornerObservationsWithoutCorrespondence<uint, cv::Point2f>(
+      const std::set<uint>&, std::set<uint>&, std::vector<cv::Point2f>& ioSrcObs) const;
+template void ExtrinsicCalibrationBase<CameraDataProcessor, CameraDataProcessor>::
+  removeCornerObservationsWithoutCorrespondence<uint, cv::Point3f>(
+      const std::set<uint>&, std::set<uint>&, std::vector<cv::Point3f>& ioSrcObs) const;
 template void ExtrinsicCalibrationBase<CameraDataProcessor, ReferenceDataProcessor3d>::
   removeCornerObservationsWithoutCorrespondence<uint, cv::Point2f>(
     const std::set<uint>&, std::set<uint>&, std::vector<cv::Point2f>& ioSrcObs) const;
@@ -744,7 +781,7 @@ std::pair<tf2::Vector3, tf2::Vector3> ExtrinsicCalibrationBase<SrcDataProcessorT
         double sRoll, sPitch, sYaw, rRoll, rPitch, rYaw;
         transSrcPoseTransform.getBasis().getRPY(sRoll, sPitch, sYaw);
         refPoseTransform.getBasis().getRPY(rRoll, rPitch, rYaw);
-        rpy_differences.push_back(tf2::Vector3(sRoll - rRoll, sPitch - rPitch, sYaw - rYaw));
+        rpy_differences.emplace_back(sRoll - rRoll, sPitch - rPitch, sYaw - rYaw);
 
         //--- add previously computed difference to running mean of XYZ and RPY
         xyz_difference_mean += xyz_differences.back();
@@ -848,7 +885,7 @@ std::string ExtrinsicCalibrationBase<SrcDataProcessorT, RefDataProcessorT>::Cali
     std::stringstream strStream;
     for (auto calib : calibrations)
     {
-        strStream << "<joint name=\"" << calib.srcSensorName << "_joint\" type=\"fixed\">";
+        strStream << "<joint name=\"" << calib.srcSensorName << R"(_joint" type="fixed">)";
         strStream << "\n\t<parent link=\""
                   << ((!calib.baseFrameId.empty()) ? calib.baseFrameId : calib.refFrameId)
                   << "\"/>";
@@ -871,5 +908,53 @@ template class ExtrinsicCalibrationBase<CameraDataProcessor, LidarDataProcessor>
 template class ExtrinsicCalibrationBase<CameraDataProcessor, ReferenceDataProcessor3d>;
 template class ExtrinsicCalibrationBase<LidarDataProcessor, LidarDataProcessor>;
 template class ExtrinsicCalibrationBase<LidarDataProcessor, ReferenceDataProcessor3d>;
+template class ExtrinsicCalibrationBase<CameraDataProcessor, CameraDataProcessor>;
+
+//==================================================================================================
+template <class SrcDataProcessorT, class RefDataProcessorT>
+void ExtrinsicCalibrationBase<SrcDataProcessorT, RefDataProcessorT>::updateCalibrationResult(const std::pair<std::string, double> error,
+                                                                                             const int numberOfObservations)
+{
+    calibResult_.error = error;
+
+    //--- computer target pose deviation if more than 1 observation is available
+    if (pSrcDataProcessor_->getNumCalibIterations() > 1 &&
+        pRefDataProcessor_->getNumCalibIterations() > 1)
+    {
+        calibResult_.target_poses_stdDev =
+          computeTargetPoseStdDev(pSrcDataProcessor_->getCalibrationTargetPoses(),
+                                  pRefDataProcessor_->getCalibrationTargetPoses());
+    }
+
+    //--- set calibration meta data
+    calibResult_.calibrations[0].srcSensorName = srcSensorName_;
+    calibResult_.calibrations[0].srcFrameId    = srcFrameId_;
+    calibResult_.calibrations[0].refSensorName = refSensorName_;
+    calibResult_.calibrations[0].refFrameId    = refFrameId_;
+    calibResult_.calibrations[0].baseFrameId   = baseFrameId_;
+
+    //--- get extrinsics
+    const lib3d::Extrinsics& extrinsics = sensorExtrinsics_.back();
+
+    //--- get transformation from lib3d::Extrinsics.
+    // resulting transformation from ref to src sensor
+    tf2::Transform refToSrcTransform;
+    utils::setTfTransformFromCameraExtrinsics(extrinsics,
+                                              refToSrcTransform);
+    calibResult_.calibrations[0].XYZ = refToSrcTransform.inverse().getOrigin(); // invert to get LOCAL_2_REF
+    double roll, pitch, yaw;
+    refToSrcTransform.inverse().getBasis().getRPY(roll, pitch, yaw); // invert to get LOCAL_2_REF
+    calibResult_.calibrations[0].RPY = tf2::Vector3(roll, pitch, yaw);
+
+    //--- store meta information into calibResult
+    calibResult_.numObservations = numberOfObservations;
+
+    //--- print out final transformation
+    RCLCPP_INFO(logger_,
+                "\n==================================================================================="
+                "\n%s"
+                "\n===================================================================================",
+                calibResult_.toString().c_str());
+}
 
 } // namespace multisensor_calibration

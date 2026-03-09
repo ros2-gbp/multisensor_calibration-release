@@ -17,6 +17,7 @@
 #include <pcl/visualization/pcl_visualizer.h>
 
 // ROS
+#include <memory>
 #include <tf2/LinearMath/Transform.hpp>
 
 // Qt
@@ -32,8 +33,6 @@
 
 namespace multisensor_calibration
 {
-using namespace utils;
-
 //==================================================================================================
 ExtrinsicLidarLidarCalibration::
   ExtrinsicLidarLidarCalibration(const std::string& nodeName,
@@ -48,34 +47,7 @@ ExtrinsicLidarLidarCalibration::
   syncQueueSize_(DEFAULT_SYNC_QUEUE_SIZE),
   useExactSync_(false)
 {
-    //--- do base class initialization
-    logger_ = this->get_logger();
-    CalibrationBase::initializeTfListener(this);
-
-    //--- setup launch and dynamic parameters
-    setupLaunchParameters(this);
-    setupDynamicParameters(this);
-
-    //--- register parameter change callback
-    pParameterCallbackHandle_ = add_on_set_parameters_callback(
-      std::bind(&ExtrinsicLidarLidarCalibration::handleDynamicParameterChange, this,
-                std::placeholders::_1));
-
-    //--- read launch parameters
-    isInitialized_ = readLaunchParameters(this);
-
-    //--- if reading of launch parameters has returned with false, i.e. if error occurred, return.
-    if (isInitialized_ == false)
-        return;
-
-    //--- initialize services
-    isInitialized_ &= initializeServices(this);
-
-    //--- initialize workspace objects
-    isInitialized_ &= initializeWorkspaceObjects();
-
-    //--- create and start calibration workflow;
-    isInitialized_ &= initializeAndStartSensorCalibration(this);
+    CalibrationBase::init(this);
 }
 
 //==================================================================================================
@@ -93,8 +65,8 @@ ExtrinsicLidarLidarCalibration::~ExtrinsicLidarLidarCalibration()
     //--- disconnection of callbacks.
     pCloudCloudApproxSync_.reset();
     pCloudCloudExactSync_.reset();
-    pSrcLidarDataProcessor_.reset();
-    pRefLidarDataProcessor_.reset();
+    pSrcDataProcessor_.reset();
+    pRefDataProcessor_.reset();
 }
 
 //==================================================================================================
@@ -104,8 +76,8 @@ void ExtrinsicLidarLidarCalibration::calibrateLastObservation()
 
     //--- check that for this calibration iteration, both camera and lidar observations are available
     //--- i.e. if list is empty, or if last item in list is smaller than iterationCnt * 100, return
-    if (pSrcLidarDataProcessor_->getNumCalibIterations() < calibrationItrCnt_ ||
-        pRefLidarDataProcessor_->getNumCalibIterations() < calibrationItrCnt_)
+    if (pSrcDataProcessor_->getNumCalibIterations() < calibrationItrCnt_ ||
+        pRefDataProcessor_->getNumCalibIterations() < calibrationItrCnt_)
         return;
 
     //--- copy marker corner observations to point cloud
@@ -117,14 +89,14 @@ void ExtrinsicLidarLidarCalibration::calibrateLastObservation()
         //--- get observations from source LiDAR
         std::set<uint> srcObservationIds;
         std::vector<cv::Point3f> srcCornerObservations;
-        pSrcLidarDataProcessor_->getOrderedObservations(srcObservationIds, srcCornerObservations,
-                                                        i, 1);
+        pSrcDataProcessor_->getOrderedObservations(srcObservationIds, srcCornerObservations,
+                                                   i, 1);
 
         //--- get observations from reference LiDAR
         std::set<uint> refObservationIds;
         std::vector<cv::Point3f> refCornerObservations;
-        pRefLidarDataProcessor_->getOrderedObservations(refObservationIds, refCornerObservations,
-                                                        i, 1);
+        pRefDataProcessor_->getOrderedObservations(refObservationIds, refCornerObservations,
+                                                   i, 1);
 
         //--- remove observations that do not have a correspondence in the other list
         removeCornerObservationsWithoutCorrespondence(srcObservationIds,
@@ -162,9 +134,9 @@ void ExtrinsicLidarLidarCalibration::calibrateLastObservation()
         auto pushToCloud = [&](const std::vector<cv::Point3f>& cornerVec,
                                pcl::PointCloud<pcl::PointXYZ>& cornerCloud)
         {
-            for (auto itr = cornerVec.cbegin(); itr != cornerVec.cend(); ++itr)
+            for (auto itr : cornerVec)
             {
-                cornerCloud.push_back(pcl::PointXYZ(itr->x, itr->y, itr->z));
+                cornerCloud.push_back(pcl::PointXYZ(itr.x, itr.y, itr.z));
             }
         };
         pushToCloud(srcCornerObservations, *pSrcMarkerCornerCloud);
@@ -176,7 +148,7 @@ void ExtrinsicLidarLidarCalibration::calibrateLastObservation()
     pcl::Correspondences correspondences;
     for (uint i = 0; i < pSrcMarkerCornerCloud->size(); ++i)
     {
-        correspondences.push_back(pcl::Correspondence(i, i, 1.f));
+        correspondences.emplace_back(i, i, 1.f);
     }
 
     //--- estimate sensor extrinsics from marker corners
@@ -205,12 +177,12 @@ bool ExtrinsicLidarLidarCalibration::finalizeCalibration()
     pcl::PointCloud<InputPointType>::Ptr pRefLidarTargetClouds(
       new pcl::PointCloud<InputPointType>());
 
-    auto srcLidarTargetCloudPtrs = pSrcLidarDataProcessor_->getCalibrationTargetCloudPtrs();
+    auto srcLidarTargetCloudPtrs = pSrcDataProcessor_->getCalibrationTargetCloudPtrs();
     for (pcl::PointCloud<InputPointType>::Ptr pSubCloud : srcLidarTargetCloudPtrs)
         pSrcLidarTargetClouds->insert(pSrcLidarTargetClouds->end(),
                                       pSubCloud->begin(),
                                       pSubCloud->end());
-    auto refLidarTargetCloudPtrs = pRefLidarDataProcessor_->getCalibrationTargetCloudPtrs();
+    auto refLidarTargetCloudPtrs = pRefDataProcessor_->getCalibrationTargetCloudPtrs();
     for (pcl::PointCloud<InputPointType>::Ptr pSubCloud : refLidarTargetCloudPtrs)
         pRefLidarTargetClouds->insert(pRefLidarTargetClouds->end(),
                                       pSubCloud->begin(),
@@ -239,9 +211,9 @@ bool ExtrinsicLidarLidarCalibration::finalizeCalibration()
         //--- ground plane
         //--- to this end, only the points on the targets are in the corresponding point clouds, thus,
         //--- the size of the point clouds can be used as upper bound of the indices.
-        pSrcTargetIndices.reset(new pcl::Indices(pSrcLidarTargetClouds->size()));
+        pSrcTargetIndices = std::make_shared<pcl::Indices>(pSrcLidarTargetClouds->size());
         std::iota(std::begin(*pSrcTargetIndices), std::end(*pSrcTargetIndices), 0);
-        pRefTargetIndices.reset(new pcl::Indices(pRefLidarTargetClouds->size()));
+        pRefTargetIndices = std::make_shared<pcl::Indices>(pRefLidarTargetClouds->size());
         std::iota(std::begin(*pRefTargetIndices), std::end(*pRefTargetIndices), 0);
 
         //--- check if specified upright frame exists
@@ -252,10 +224,10 @@ bool ExtrinsicLidarLidarCalibration::finalizeCalibration()
             bool isLookupSuccessful;
             try
             {
-                srcTransfMsg = tfBuffer_->lookupTransform(srcCloudFrameId_, uprightFrameId_,
+                srcTransfMsg = tfBuffer_->lookupTransform(srcFrameId_, uprightFrameId_,
                                                           tf2::TimePointZero);
                 refTransfMsg = tfBuffer_->lookupTransform(
-                  ((baseFrameId_.empty()) ? refCloudFrameId_ : baseFrameId_),
+                  ((baseFrameId_.empty()) ? refFrameId_ : baseFrameId_),
                   uprightFrameId_, tf2::TimePointZero);
 
                 isLookupSuccessful = true;
@@ -307,9 +279,9 @@ bool ExtrinsicLidarLidarCalibration::finalizeCalibration()
                 //--- extract ground planes in sensor data with an angle tolerance of 5 degrees
                 //--- to the upright vectors.
                 LidarDataProcessor::extractPlaneFromPointCloud(
-                  pRefLidarDataProcessor_->getLastInputCloud(), refUprightVec, 5, pRefGroundPlane);
+                  pRefDataProcessor_->getLastInputCloud(), refUprightVec, 5, pRefGroundPlane);
                 LidarDataProcessor::extractPlaneFromPointCloud(
-                  pSrcLidarDataProcessor_->getLastInputCloud(), srcUprightVec, 5, pSrcGroundPlane);
+                  pSrcDataProcessor_->getLastInputCloud(), srcUprightVec, 5, pSrcGroundPlane);
 
                 //--- insert the extracted ground planes into the point clouds used for the ICP
                 pRefLidarTargetClouds->insert(pRefLidarTargetClouds->end(),
@@ -330,7 +302,7 @@ bool ExtrinsicLidarLidarCalibration::finalizeCalibration()
     }
 
     //--- run ICP
-    runIcp<InputPointType>(
+    const double rmse = runIcp<InputPointType>(
       pSrcLidarTargetClouds, pRefLidarTargetClouds,
       static_cast<small_gicp::RegistrationSetting::RegistrationType>(
         registrationParams_.registration_icp_variant.value),
@@ -338,53 +310,7 @@ bool ExtrinsicLidarLidarCalibration::finalizeCalibration()
       registrationParams_.registration_icp_rotation_tolerance.value,
       registrationParams_.registration_icp_translation_tolerance.value);
 
-    //--- calculate RMSE
-    //--- if no ground plane is used, the pointer to the indices will be nullptr, thus, the full
-    //--- cloud will be used
-    double rmse = utils::calculateRootMeanSquaredError<InputPointType, InputPointType>(
-      pSrcLidarTargetClouds, pRefLidarTargetClouds,
-      ExtrinsicCalibrationBase::sensorExtrinsics_.back(),
-      pSrcTargetIndices, pRefTargetIndices);
-    calibResult_.error = std::make_pair("Root Mean Squared Error (in m)", rmse);
-
-    //--- computer target pose deviation if more than 1 observation is available
-    if (pSrcDataProcessor_->getNumCalibIterations() > 1 &&
-        pRefDataProcessor_->getNumCalibIterations() > 1)
-    {
-        calibResult_.target_poses_stdDev =
-          computeTargetPoseStdDev(pSrcDataProcessor_->getCalibrationTargetPoses(),
-                                  pRefDataProcessor_->getCalibrationTargetPoses());
-    }
-
-    //--- set calibration meta data
-    calibResult_.calibrations[0].srcSensorName = srcSensorName_;
-    calibResult_.calibrations[0].srcFrameId    = srcFrameId_;
-    calibResult_.calibrations[0].refSensorName = refSensorName_;
-    calibResult_.calibrations[0].refFrameId    = refFrameId_;
-    calibResult_.calibrations[0].baseFrameId   = baseFrameId_;
-
-    //--- get extrinsics
-    const lib3d::Extrinsics& extrinsics = sensorExtrinsics_.back();
-
-    //--- get transformation from lib3d::Extrinsics.
-    // resulting transformation from ref to src sensor
-    tf2::Transform refToSrcTransform;
-    setTfTransformFromCameraExtrinsics(extrinsics,
-                                       refToSrcTransform);
-    calibResult_.calibrations[0].XYZ = refToSrcTransform.inverse().getOrigin(); // invert to get LOCAL_2_REF
-    double roll, pitch, yaw;
-    refToSrcTransform.inverse().getBasis().getRPY(roll, pitch, yaw); // invert to get LOCAL_2_REF
-    calibResult_.calibrations[0].RPY = tf2::Vector3(roll, pitch, yaw);
-
-    //--- store meta information into calibResult
-    calibResult_.numObservations = static_cast<int>(pRefDataProcessor_->getNumCalibIterations());
-
-    //--- print out final transformation
-    RCLCPP_INFO(logger_,
-                "\n==================================================================================="
-                "\n%s"
-                "\n===================================================================================",
-                calibResult_.toString().c_str());
+    ExtrinsicCalibrationBase::updateCalibrationResult(std::make_pair("Root Mean Squared Error (in m)", rmse), static_cast<int>(pRefDataProcessor_->getNumCalibIterations()));
 
     //--- publish last sensor extrinsics
     ExtrinsicCalibrationBase::publishLastCalibrationResult();
@@ -402,8 +328,8 @@ bool ExtrinsicLidarLidarCalibration::initializeDataProcessors()
     auto initializeLidarDataProcessor = [&](std::shared_ptr<LidarDataProcessor>& iopProcessor,
                                             const std::string& iSensorName)
     {
-        iopProcessor.reset(
-          new LidarDataProcessor(logger_.get_name(), iSensorName, calibTargetFilePath_));
+        iopProcessor = std::make_shared<LidarDataProcessor>(
+          logger_.get_name(), iSensorName, calibTargetFilePath_);
         if (iopProcessor)
         {
             iopProcessor->initializeServices(this);
@@ -417,8 +343,8 @@ bool ExtrinsicLidarLidarCalibration::initializeDataProcessors()
     };
 
     //--- initialize data processors
-    initializeLidarDataProcessor(pSrcLidarDataProcessor_, srcSensorName_);
-    initializeLidarDataProcessor(pRefLidarDataProcessor_, refSensorName_);
+    initializeLidarDataProcessor(pSrcDataProcessor_, srcSensorName_);
+    initializeLidarDataProcessor(pRefDataProcessor_, refSensorName_);
 
     return isSuccessful;
 }
@@ -427,8 +353,8 @@ bool ExtrinsicLidarLidarCalibration::initializeDataProcessors()
 bool ExtrinsicLidarLidarCalibration::initializeSubscribers(rclcpp::Node* ipNode)
 {
     //--- subscribe to topics
-    srcCloudSubsc_.subscribe(ipNode, srcLidarCloudTopic_);
-    refCloudSubsc_.subscribe(ipNode, refLidarCloudTopic_);
+    srcCloudSubsc_.subscribe(ipNode, srcTopicName_);
+    refCloudSubsc_.subscribe(ipNode, refTopicName_);
 
     //--- initialize synchronizers
     if (useExactSync_)
@@ -463,7 +389,7 @@ bool ExtrinsicLidarLidarCalibration::initializeWorkspaceObjects()
     //--- initialize calibration workspace
     fs::path calibWsPath = robotWsPath_;
     calibWsPath /=
-      std::string(srcLidarSensorName_ + "_" + refLidarSensorName_ + "_extrinsic_calibration");
+      std::string(srcSensorName_ + "_" + refSensorName_ + "_extrinsic_calibration");
     pCalibrationWs_ =
       std::make_shared<ExtrinsicLidarLidarCalibWorkspace>(calibWsPath, logger_);
     retVal &= (pCalibrationWs_ != nullptr);
@@ -482,35 +408,10 @@ bool ExtrinsicLidarLidarCalibration::onRequestRemoveObservation(
   const std::shared_ptr<interf::srv::RemoveLastObservation::Request> ipReq,
   std::shared_ptr<interf::srv::RemoveLastObservation::Response> opRes)
 {
-    UNUSED_VAR(ipReq);
-
-    //--- if there is a calibration to be removed, remove all observations from this iteration
-    if (calibrationItrCnt_ > 1)
-    {
-
-        //--- get ownership of mutex
-        std::lock_guard<std::mutex> guard(dataProcessingMutex_);
-
-        calibrationItrCnt_--;
-
-        pSrcDataProcessor_->removeCalibIteration(calibrationItrCnt_);
-        pRefDataProcessor_->removeCalibIteration(calibrationItrCnt_);
-
-        //--- pop last sensor extrinsic
+    if (ExtrinsicCalibrationBase<LidarDataProcessor, LidarDataProcessor>::onRequestRemoveObservation(ipReq, opRes))
         sensorExtrinsics_.pop_back();
-
-        opRes->is_accepted = true;
-        opRes->msg         = "Last observation successfully removed! "
-                             "Remaining number of observations: " +
-                     std::to_string(pRefDataProcessor_->getNumCalibIterations());
-    }
     else
-    {
-        opRes->is_accepted = false;
-        opRes->msg         = "No observation available to be removed!";
-    }
-
-    RCLCPP_INFO(logger_, "%s", opRes->msg.c_str());
+        return false;
 
     return true;
 }
@@ -526,12 +427,12 @@ void ExtrinsicLidarLidarCalibration::onSensorDataReceived(
         RCLCPP_ERROR(logger_, "Node is not initialized.");
         return;
     }
-    if (pSrcLidarDataProcessor_ == nullptr)
+    if (pSrcDataProcessor_ == nullptr)
     {
         RCLCPP_ERROR(logger_, "Source lidar data processor is not initialized.");
         return;
     }
-    if (pRefLidarDataProcessor_ == nullptr)
+    if (pRefDataProcessor_ == nullptr)
     {
         RCLCPP_ERROR(logger_, "Reference lidar data processor is not initialized.");
         return;
@@ -546,12 +447,12 @@ void ExtrinsicLidarLidarCalibration::onSensorDataReceived(
     // source point cloud
     pcl::PointCloud<InputPointType> srcPointCloud;
     isConversionSuccessful &=
-      pSrcLidarDataProcessor_->getSensorDataFromMsg(ipSrcCloudMsg, srcPointCloud);
+      pSrcDataProcessor_->getSensorDataFromMsg(ipSrcCloudMsg, srcPointCloud);
 
     // reference point cloud
     pcl::PointCloud<InputPointType> refPointCloud;
     isConversionSuccessful &=
-      pRefLidarDataProcessor_->getSensorDataFromMsg(ipRefCloudMsg, refPointCloud);
+      pRefDataProcessor_->getSensorDataFromMsg(ipRefCloudMsg, refPointCloud);
 
     if (!isConversionSuccessful)
     {
@@ -561,19 +462,19 @@ void ExtrinsicLidarLidarCalibration::onSensorDataReceived(
     }
 
     //--- set frame ids and initialize sensor extrinsics if applicable
-    if (srcCloudFrameId_ != ipSrcCloudMsg->header.frame_id ||
-        refCloudFrameId_ != ipRefCloudMsg->header.frame_id)
+    if (srcFrameId_ != ipSrcCloudMsg->header.frame_id ||
+        refFrameId_ != ipRefCloudMsg->header.frame_id)
     {
-        srcCloudFrameId_ = ipSrcCloudMsg->header.frame_id;
-        refCloudFrameId_ = ipRefCloudMsg->header.frame_id;
+        srcFrameId_ = ipSrcCloudMsg->header.frame_id;
+        refFrameId_ = ipRefCloudMsg->header.frame_id;
 
         //--- compute sensor extrinsics between source frame id and ref or base frame id
         //--- if base frame id is not empty and unequal to refCloudFrameId also get transform
         //--- between refFrameID and baseFrameID and pass to refLidarProcessor.
-        if (!baseFrameId_.empty() && baseFrameId_ != refCloudFrameId_)
+        if (!baseFrameId_.empty() && baseFrameId_ != refFrameId_)
         {
             if (useTfTreeAsInitialGuess_)
-                setSensorExtrinsicsFromFrameIds(srcCloudFrameId_, baseFrameId_);
+                setSensorExtrinsicsFromFrameIds(srcFrameId_, baseFrameId_);
 
             if (tfBuffer_->_frameExists(baseFrameId_))
             {
@@ -582,7 +483,7 @@ void ExtrinsicLidarLidarCalibration::onSensorDataReceived(
 
                     auto t = tfBuffer_->lookupTransform(baseFrameId_, refFrameId_,
                                                         tf2::TimePointZero);
-                    pRefLidarDataProcessor_->setDataTransform(
+                    pRefDataProcessor_->setDataTransform(
                       std::make_shared<tf2::Transform>(tf2::Quaternion(t.transform.rotation.x,
                                                                        t.transform.rotation.y,
                                                                        t.transform.rotation.z,
@@ -606,13 +507,13 @@ void ExtrinsicLidarLidarCalibration::onSensorDataReceived(
                                      "to reference cloud.",
                             baseFrameId_.c_str());
                 baseFrameId_ = "";
-                pRefLidarDataProcessor_->setDataTransform(nullptr);
+                pRefDataProcessor_->setDataTransform(nullptr);
             }
         }
         else
         {
             if (useTfTreeAsInitialGuess_)
-                setSensorExtrinsicsFromFrameIds(srcCloudFrameId_, refCloudFrameId_);
+                setSensorExtrinsicsFromFrameIds(srcFrameId_, refFrameId_);
         }
     }
 
@@ -624,14 +525,14 @@ void ExtrinsicLidarLidarCalibration::onSensorDataReceived(
     //--- process data from source lidar asynchronously
     std::future<LidarDataProcessor::EProcessingResult> srcLidarProcFuture =
       std::async(&LidarDataProcessor::processData,
-                 pSrcLidarDataProcessor_,
+                 pSrcDataProcessor_,
                  srcPointCloud,
                  procLevel);
 
     //--- process data from reference lidar asynchronously
     std::future<LidarDataProcessor::EProcessingResult> refLidarProcFuture =
       std::async(&LidarDataProcessor::processData,
-                 pRefLidarDataProcessor_,
+                 pRefDataProcessor_,
                  refPointCloud,
                  procLevel);
 
@@ -643,12 +544,12 @@ void ExtrinsicLidarLidarCalibration::onSensorDataReceived(
     if (procLevel == LidarDataProcessor::PREVIEW)
     {
         if (srcLidarProcResult == LidarDataProcessor::SUCCESS)
-            pSrcLidarDataProcessor_->publishPreview(ipSrcCloudMsg->header);
+            pSrcDataProcessor_->publishPreview(ipSrcCloudMsg->header);
         if (refLidarProcResult == LidarDataProcessor::SUCCESS)
-            pRefLidarDataProcessor_->publishPreview(ipRefCloudMsg->header.stamp,
-                                                    (baseFrameId_.empty())
-                                                      ? refFrameId_
-                                                      : baseFrameId_);
+            pRefDataProcessor_->publishPreview(ipRefCloudMsg->header.stamp,
+                                               (baseFrameId_.empty())
+                                                 ? refFrameId_
+                                                 : baseFrameId_);
     }
     //--- else if, processing level is target_detection,
     //--- calibrate only if processing for both sensors is successful
@@ -658,11 +559,11 @@ void ExtrinsicLidarLidarCalibration::onSensorDataReceived(
             refLidarProcResult == LidarDataProcessor::SUCCESS)
         {
             //--- publish detections
-            pSrcLidarDataProcessor_->publishLastTargetDetection(ipSrcCloudMsg->header);
-            pRefLidarDataProcessor_->publishLastTargetDetection(ipRefCloudMsg->header.stamp,
-                                                                (baseFrameId_.empty())
-                                                                  ? refFrameId_
-                                                                  : baseFrameId_);
+            pSrcDataProcessor_->publishLastTargetDetection(ipSrcCloudMsg->header);
+            pRefDataProcessor_->publishLastTargetDetection(ipRefCloudMsg->header.stamp,
+                                                           (baseFrameId_.empty())
+                                                             ? refFrameId_
+                                                             : baseFrameId_);
 
             //--- perform single calibration iteration
             //--- To this end, this only removes observations without correspondence.
@@ -672,11 +573,11 @@ void ExtrinsicLidarLidarCalibration::onSensorDataReceived(
         {
             if (srcLidarProcResult != LidarDataProcessor::SUCCESS &&
                 refLidarProcResult == LidarDataProcessor::SUCCESS)
-                pRefLidarDataProcessor_->removeCalibIteration(calibrationItrCnt_);
+                pRefDataProcessor_->removeCalibIteration(calibrationItrCnt_);
 
             if (srcLidarProcResult == LidarDataProcessor::SUCCESS &&
                 refLidarProcResult != LidarDataProcessor::SUCCESS)
-                pSrcLidarDataProcessor_->removeCalibIteration(calibrationItrCnt_);
+                pSrcDataProcessor_->removeCalibIteration(calibrationItrCnt_);
 
             interf::msg::CalibrationResult calibResultMsg;
             calibResultMsg.is_successful = false;
@@ -705,19 +606,19 @@ bool ExtrinsicLidarLidarCalibration::saveCalibrationSettingsToWorkspace()
 
     //--- source lidar sensor name
     pCalibSettings->setValue("source_lidar/sensor_name",
-                             QString::fromStdString(srcLidarSensorName_));
+                             QString::fromStdString(srcSensorName_));
 
     //--- source lidar image topic
     pCalibSettings->setValue("source_lidar/cloud_topic",
-                             QString::fromStdString(srcLidarCloudTopic_));
+                             QString::fromStdString(srcTopicName_));
 
     //--- reference lidar sensor name
     pCalibSettings->setValue("reference_lidar/sensor_name",
-                             QString::fromStdString(refLidarSensorName_));
+                             QString::fromStdString(refSensorName_));
 
     //--- reference lidar image topic
     pCalibSettings->setValue("reference_lidar/cloud_topic",
-                             QString::fromStdString(refLidarCloudTopic_));
+                             QString::fromStdString(refTopicName_));
 
     //--- align_ground_planes
     pCalibSettings->setValue("calibration/align_ground_planes",
@@ -836,19 +737,19 @@ bool ExtrinsicLidarLidarCalibration::readLaunchParameters(const rclcpp::Node* ip
         return false;
 
     //--- src_lidar_sensor_name
-    srcLidarSensorName_ = CalibrationBase::readStringLaunchParameter(
+    srcSensorName_ = CalibrationBase::readStringLaunchParameter(
       ipNode, "src_lidar_sensor_name", DEFAULT_LIDAR_SENSOR_NAME);
 
     //--- src_lidar_cloud_topic
-    srcLidarCloudTopic_ = CalibrationBase::readStringLaunchParameter(
+    srcTopicName_ = CalibrationBase::readStringLaunchParameter(
       ipNode, "src_lidar_cloud_topic", DEFAULT_LIDAR_CLOUD_TOPIC);
 
     //--- ref_lidar_sensor_name
-    refLidarSensorName_ = CalibrationBase::readStringLaunchParameter(
+    refSensorName_ = CalibrationBase::readStringLaunchParameter(
       ipNode, "ref_lidar_sensor_name", DEFAULT_LIDAR_SENSOR_NAME);
 
     //--- ref_lidar_cloud_topic
-    refLidarCloudTopic_ = CalibrationBase::readStringLaunchParameter(
+    refTopicName_ = CalibrationBase::readStringLaunchParameter(
       ipNode, "ref_lidar_cloud_topic", DEFAULT_LIDAR_CLOUD_TOPIC);
 
     //--- align_ground_planes
@@ -886,8 +787,8 @@ bool ExtrinsicLidarLidarCalibration::setDynamicParameter(const rclcpp::Parameter
     }
     else if (lidarTargetDetectionParams_.tryToSetParameter(iParameter))
     {
-        pSrcLidarDataProcessor_->setParameters(lidarTargetDetectionParams_);
-        pRefLidarDataProcessor_->setParameters(lidarTargetDetectionParams_);
+        pSrcDataProcessor_->setParameters(lidarTargetDetectionParams_);
+        pRefDataProcessor_->setParameters(lidarTargetDetectionParams_);
         return true;
     }
     else
@@ -901,10 +802,10 @@ void ExtrinsicLidarLidarCalibration::reset()
 {
     ExtrinsicCalibrationBase::reset();
 
-    pSrcLidarDataProcessor_->reset();
-    pSrcLidarDataProcessor_->setPreprocFilter(nullptr);
-    pRefLidarDataProcessor_->reset();
-    pRefLidarDataProcessor_->setPreprocFilter(nullptr);
+    pSrcDataProcessor_->reset();
+    pSrcDataProcessor_->setPreprocFilter(nullptr);
+    pRefDataProcessor_->reset();
+    pRefDataProcessor_->setPreprocFilter(nullptr);
 }
 
 //==================================================================================================

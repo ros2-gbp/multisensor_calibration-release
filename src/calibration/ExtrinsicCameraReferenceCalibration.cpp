@@ -16,6 +16,7 @@
 #include <QFile>
 
 // ROS
+#include <memory>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <tf2/LinearMath/Transform.hpp>
 
@@ -38,12 +39,9 @@
 
 // multisensor_calibration
 #include "multisensor_calibration/common/common.h"
-#include "multisensor_calibration/common/utils.hpp"
 
 namespace multisensor_calibration
 {
-
-using namespace utils;
 
 //==================================================================================================
 ExtrinsicCameraReferenceCalibration::
@@ -53,34 +51,7 @@ ExtrinsicCameraReferenceCalibration::
     EXTRINSIC_CAMERA_REFERENCE_CALIBRATION),
   rclcpp::Node(nodeName, options)
 {
-    //--- do base class initialization
-    CalibrationBase::logger_ = this->get_logger();
-    CalibrationBase::initializeTfListener(this);
-
-    //--- setup launch and dynamic parameters
-    setupLaunchParameters(this);
-    setupDynamicParameters(this);
-
-    //--- register parameter change callback
-    pParameterCallbackHandle_ = add_on_set_parameters_callback(
-      std::bind(&ExtrinsicCameraReferenceCalibration::handleDynamicParameterChange, this,
-                std::placeholders::_1));
-
-    //--- read launch parameters
-    isInitialized_ = readLaunchParameters(this);
-
-    //--- if reading of launch parameters has returned with false, i.e. if error occurred, return.
-    if (isInitialized_ == false)
-        return;
-
-    //--- initialize services
-    isInitialized_ &= initializeServices(this);
-
-    //--- initialize workspace objects
-    isInitialized_ &= initializeWorkspaceObjects();
-
-    //--- create and start calibration workflow;
-    isInitialized_ &= initializeAndStartSensorCalibration(this);
+    CalibrationBase::init(this);
 }
 
 //==================================================================================================
@@ -96,14 +67,14 @@ ExtrinsicCameraReferenceCalibration::~ExtrinsicCameraReferenceCalibration()
 {
     //--- reset pointers message filters before sensor processors in order to avoid seg fault during
     //--- disconnection of callbacks.
-    pCamDataProcessor_.reset();
+    pSrcDataProcessor_.reset();
     pRefDataProcessor_.reset();
 }
 
 //==================================================================================================
 bool ExtrinsicCameraReferenceCalibration::finalizeCalibration()
 {
-    if (!pCamDataProcessor_->isCameraIntrinsicsSet())
+    if (!pSrcDataProcessor_->isCameraIntrinsicsSet())
     {
         RCLCPP_ERROR(logger_, "Could not finalize calibration. "
                               "Camera intrinsics are not set");
@@ -113,7 +84,7 @@ bool ExtrinsicCameraReferenceCalibration::finalizeCalibration()
     //--- get all observations from data processors
     std::set<uint> cameraObservationIds;
     std::vector<cv::Point2f> cameraCornerObservations;
-    pCamDataProcessor_->getOrderedObservations(cameraObservationIds, cameraCornerObservations);
+    pSrcDataProcessor_->getOrderedObservations(cameraObservationIds, cameraCornerObservations);
 
     std::set<uint> refObservationIds;
     std::vector<cv::Point3f> refCornerObservations;
@@ -141,42 +112,14 @@ bool ExtrinsicCameraReferenceCalibration::finalizeCalibration()
       cameraCornerObservations.cend(),
       refCornerObservations.cbegin(),
       refCornerObservations.cend(),
-      pCamDataProcessor_->cameraIntrinsics(),
+      pSrcDataProcessor_->cameraIntrinsics(),
       static_cast<float>(registrationParams_.pnp_inlier_rpj_error_limit.value),
       false,
       finalSensorExtrinsics);
 
-    //--- set calibration meta data
-    calibResult_.calibrations[0].srcSensorName = srcSensorName_;
-    calibResult_.calibrations[0].srcFrameId    = srcFrameId_;
-    calibResult_.calibrations[0].refSensorName = refSensorName_;
-    calibResult_.calibrations[0].refFrameId    = refFrameId_;
-    calibResult_.calibrations[0].baseFrameId   = baseFrameId_;
+    sensorExtrinsics_.push_back(finalSensorExtrinsics);
 
-    //--- get transformation from lib3d::Extrinsics.
-    // resulting transformation from ref to src sensor
-    tf2::Transform refToSrcTransform;
-    setTfTransformFromCameraExtrinsics(finalSensorExtrinsics,
-                                       refToSrcTransform);
-    calibResult_.calibrations[0].XYZ = refToSrcTransform.inverse().getOrigin(); // invert to get LOCAL_2_REF
-    double roll, pitch, yaw;
-    refToSrcTransform.inverse().getBasis().getRPY(roll, pitch, yaw); // invert to get LOCAL_2_REF
-    calibResult_.calibrations[0].RPY = tf2::Vector3(roll, pitch, yaw);
-
-    //--- store reprojection error
-    calibResult_.error = std::make_pair("Mean Reprojection Error (in pixel)", pnpRetVal.first);
-
-    //--- computer target pose deviation if more than 1 observation is available
-    if (pSrcDataProcessor_->getNumCalibIterations() > 1 &&
-        pRefDataProcessor_->getNumCalibIterations() > 1)
-    {
-        calibResult_.target_poses_stdDev =
-          computeTargetPoseStdDev(pSrcDataProcessor_->getCalibrationTargetPoses(),
-                                  pRefDataProcessor_->getCalibrationTargetPoses());
-    }
-
-    //--- store meta information into calibResult
-    calibResult_.numObservations = static_cast<int>(pRefDataProcessor_->getNumCalibIterations());
+    ExtrinsicCalibrationBase::updateCalibrationResult(std::make_pair("Mean Reprojection Error (in pixel)", pnpRetVal.first), static_cast<int>(pRefDataProcessor_->getNumCalibIterations()));
 
     //--- calculate additional sensor calibrations if camera is to be calibrated as stereo camera
     if (isStereoCamera_ && rightCameraInfo_.width != 0)
@@ -184,14 +127,6 @@ bool ExtrinsicCameraReferenceCalibration::finalizeCalibration()
     else if (isStereoCamera_ && rightCameraInfo_.width == 0)
         RCLCPP_ERROR(logger_, "Could not calculate additional sensor calibrations in stereo case "
                               "because 'camera info' data of right camera is not available.");
-
-    //--- print out final transformation
-    RCLCPP_INFO(
-      logger_,
-      "\n==================================================================================="
-      "\n%s"
-      "\n===================================================================================",
-      calibResult_.toString().c_str());
 
     //--- publish last sensor extrinsics
     ExtrinsicCalibrationBase::publishLastCalibrationResult();
@@ -203,21 +138,21 @@ bool ExtrinsicCameraReferenceCalibration::finalizeCalibration()
 bool ExtrinsicCameraReferenceCalibration::initializeDataProcessors()
 {
     //--- initialize camera data processor
-    pCamDataProcessor_.reset(
-      new CameraDataProcessor(logger_.get_name(), cameraSensorName_, calibTargetFilePath_));
+    pSrcDataProcessor_ = std::make_shared<CameraDataProcessor>(
+      logger_.get_name(), srcSensorName_, calibTargetFilePath_);
 
     //--- initialize reference data processor
-    pRefDataProcessor_.reset(
-      new ReferenceDataProcessor3d(logger_.get_name(), referenceName_, calibTargetFilePath_));
+    pRefDataProcessor_ = std::make_shared<ReferenceDataProcessor3d>(
+      logger_.get_name(), refSensorName_, calibTargetFilePath_);
 
     //--- if either of the two data processors are not initialized, return false.
-    if (!pCamDataProcessor_ || !pRefDataProcessor_)
+    if (!pSrcDataProcessor_ || !pRefDataProcessor_)
         return false;
 
     //--- set data to camera data processor
-    pCamDataProcessor_->setImageState(imageState_);
-    pCamDataProcessor_->initializeServices(this);
-    pCamDataProcessor_->initializePublishers(this);
+    pSrcDataProcessor_->setImageState(imageState_);
+    pSrcDataProcessor_->initializeServices(this);
+    pSrcDataProcessor_->initializePublishers(this);
 
     //--- set data to reference data processor
     pRefDataProcessor_->initializeServices(this);
@@ -249,7 +184,7 @@ bool ExtrinsicCameraReferenceCalibration::initializeSubscribers(rclcpp::Node* ip
 
     //--- subscribe to image topics
     pImageSubsc_ = ipNode->create_subscription<sensor_msgs::msg::Image>(
-      cameraImageTopic_,
+      srcTopicName_,
       1,
       std::bind(&ExtrinsicCameraReferenceCalibration::onSensorDataReceived, this, std::placeholders::_1));
 
@@ -266,7 +201,7 @@ bool ExtrinsicCameraReferenceCalibration::initializeWorkspaceObjects()
     //--- initialize calibration workspace
     fs::path calibWsPath = robotWsPath_;
     calibWsPath /=
-      std::string(cameraSensorName_ + "_" + refSensorName_ + "_extrinsic_calibration");
+      std::string(srcSensorName_ + "_" + refSensorName_ + "_extrinsic_calibration");
     pCalibrationWs_ =
       std::make_shared<ExtrinsicCameraReferenceCalibWorkspace>(calibWsPath, logger_);
     retVal &= (pCalibrationWs_ != nullptr);
@@ -288,10 +223,10 @@ bool ExtrinsicCameraReferenceCalibration::onRequestCameraIntrinsics(
     UNUSED_VAR(ipReq);
 
     lib3d::Intrinsics cameraIntr;
-    if (!isInitialized_ || pCamDataProcessor_ == nullptr)
+    if (!isInitialized_ || pSrcDataProcessor_ == nullptr)
         cameraIntr = lib3d::Intrinsics();
     else
-        cameraIntr = pCamDataProcessor_->getCameraIntrinsics();
+        cameraIntr = pSrcDataProcessor_->getCameraIntrinsics();
 
     //--- image size
     opRes->intrinsics.width  = cameraIntr.getWidth();
@@ -319,46 +254,6 @@ bool ExtrinsicCameraReferenceCalibration::onRequestCameraIntrinsics(
 }
 
 //==================================================================================================
-bool ExtrinsicCameraReferenceCalibration::onRequestRemoveObservation(
-  const std::shared_ptr<interf::srv::RemoveLastObservation::Request> ipReq,
-  std::shared_ptr<interf::srv::RemoveLastObservation::Response> opRes)
-{
-    UNUSED_VAR(ipReq);
-
-    //--- if there is a calibration to be removed, remove all observations from this iteration
-    if (calibrationItrCnt_ > 1)
-    {
-
-        //--- get ownership of mutex
-        std::lock_guard<std::mutex> guard(dataProcessingMutex_);
-
-        calibrationItrCnt_--;
-
-        pCamDataProcessor_->removeCalibIteration(calibrationItrCnt_);
-        pRefDataProcessor_->removeCalibIteration(calibrationItrCnt_);
-
-        //--- since no per iteration calibration is performed no sensorExtrinsic needs
-        //-- to be removed
-        // sensorExtrinsics_.pop_back()
-
-        opRes->is_accepted = true;
-        opRes->msg         = "Last observation successfully removed! "
-                             "Remaining number of observations: " +
-                     std::to_string(pCamDataProcessor_->getNumCalibIterations()) + " (src), " +
-                     std::to_string(pRefDataProcessor_->getNumCalibIterations()) + " (ref).";
-    }
-    else
-    {
-        opRes->is_accepted = false;
-        opRes->msg         = "No observation available to be removed!";
-    }
-
-    RCLCPP_INFO(logger_, "%s", opRes->msg.c_str());
-
-    return true;
-}
-
-//==================================================================================================
 void ExtrinsicCameraReferenceCalibration::onSensorDataReceived(
   const InputImage_Message_T::ConstSharedPtr& ipImgMsg)
 {
@@ -368,7 +263,7 @@ void ExtrinsicCameraReferenceCalibration::onSensorDataReceived(
         RCLCPP_ERROR(logger_, "Node is not initialized.");
         return;
     }
-    if (pCamDataProcessor_ == nullptr)
+    if (pSrcDataProcessor_ == nullptr)
     {
         RCLCPP_ERROR(logger_, "Camera data processor is not initialized.");
         return;
@@ -387,7 +282,7 @@ void ExtrinsicCameraReferenceCalibration::onSensorDataReceived(
 
     // camera image
     cv::Mat cameraImage;
-    isConversionSuccessful &= pCamDataProcessor_->getSensorDataFromMsg(ipImgMsg, cameraImage);
+    isConversionSuccessful &= pSrcDataProcessor_->getSensorDataFromMsg(ipImgMsg, cameraImage);
 
     if (!isConversionSuccessful)
     {
@@ -398,16 +293,16 @@ void ExtrinsicCameraReferenceCalibration::onSensorDataReceived(
 
     //--- camera intrinsics is not set to camera data processor,
     //--- wait for camera_info message and set intrinsics
-    if (!pCamDataProcessor_->isCameraIntrinsicsSet())
+    if (!pSrcDataProcessor_->isCameraIntrinsicsSet())
     {
-        if (!initializeCameraIntrinsics(pCamDataProcessor_.get()))
+        if (!initializeCameraIntrinsics(pSrcDataProcessor_.get()))
             return;
     }
 
     //--- set frame ids and initialize sensor extrinsics if applicable
-    if (imageFrameId_ != ipImgMsg->header.frame_id)
+    if (srcFrameId_ != ipImgMsg->header.frame_id)
     {
-        imageFrameId_ = ipImgMsg->header.frame_id;
+        srcFrameId_ = ipImgMsg->header.frame_id;
 
         //--- compute sensor extrinsics between source frame id and ref or base frame id
         //--- if base frame id is not empty and unequal to refCloudFrameId also get transform
@@ -415,7 +310,7 @@ void ExtrinsicCameraReferenceCalibration::onSensorDataReceived(
         if (!baseFrameId_.empty() && baseFrameId_ != refFrameId_)
         {
             if (useTfTreeAsInitialGuess_)
-                setSensorExtrinsicsFromFrameIds(imageFrameId_, baseFrameId_);
+                setSensorExtrinsicsFromFrameIds(srcFrameId_, baseFrameId_);
 
             if (tfBuffer_->_frameExists(baseFrameId_))
             {
@@ -453,7 +348,7 @@ void ExtrinsicCameraReferenceCalibration::onSensorDataReceived(
         else
         {
             if (useTfTreeAsInitialGuess_)
-                setSensorExtrinsicsFromFrameIds(imageFrameId_, refFrameId_);
+                setSensorExtrinsicsFromFrameIds(srcFrameId_, refFrameId_);
         }
     }
 
@@ -465,7 +360,7 @@ void ExtrinsicCameraReferenceCalibration::onSensorDataReceived(
     //--- process camera data asynchronously
     std::future<CameraDataProcessor::EProcessingResult> camProcFuture =
       std::async(&CameraDataProcessor::processData,
-                 pCamDataProcessor_,
+                 pSrcDataProcessor_,
                  cameraImage,
                  procLevel);
 
@@ -476,7 +371,7 @@ void ExtrinsicCameraReferenceCalibration::onSensorDataReceived(
     if (procLevel == CameraDataProcessor::PREVIEW)
     {
         if (camProcResult == CameraDataProcessor::SUCCESS)
-            pCamDataProcessor_->publishPreview(ipImgMsg->header);
+            pSrcDataProcessor_->publishPreview(ipImgMsg->header);
     }
     //--- else if, processing level is target_detection,
     //--- calibrate only if processing for both sensors is successful
@@ -487,7 +382,7 @@ void ExtrinsicCameraReferenceCalibration::onSensorDataReceived(
         if (camProcResult == CameraDataProcessor::SUCCESS)
         {
             //--- publish detections
-            pCamDataProcessor_->publishLastTargetDetection(ipImgMsg->header);
+            pSrcDataProcessor_->publishLastTargetDetection(ipImgMsg->header);
 
             //--- Other extrinsic calibration routines, i.e. camera-lidar or lidar-lidar, run
             //--- an intermediate calibration at this point. This will increase the calibration
@@ -528,7 +423,7 @@ bool ExtrinsicCameraReferenceCalibration::saveCalibrationSettingsToWorkspace()
 
     //--- reference name
     pCalibSettings->setValue("reference/name",
-                             QString::fromStdString(referenceName_));
+                             QString::fromStdString(refSensorName_));
 
     //--- reference frame id
     pCalibSettings->setValue("reference/frame_id",
@@ -578,7 +473,7 @@ bool ExtrinsicCameraReferenceCalibration::readLaunchParameters(const rclcpp::Nod
         return false;
 
     //--- reference_name
-    referenceName_ =
+    refSensorName_ =
       readStringLaunchParameter(ipNode, "reference_name", "reference");
 
     //--- ref_lidar_sensor_name
@@ -602,7 +497,7 @@ bool ExtrinsicCameraReferenceCalibration::setDynamicParameter(const rclcpp::Para
     {
         return true;
     }
-    else if (registrationParams_.tryToSetParameter(iParameter))
+    if (registrationParams_.tryToSetParameter(iParameter))
     {
         return true;
     }
@@ -617,7 +512,7 @@ void ExtrinsicCameraReferenceCalibration::reset()
 {
     ExtrinsicCalibrationBase::reset();
 
-    pCamDataProcessor_->reset();
+    pSrcDataProcessor_->reset();
     pRefDataProcessor_->reset();
 }
 

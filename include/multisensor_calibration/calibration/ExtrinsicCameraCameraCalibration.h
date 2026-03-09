@@ -33,6 +33,7 @@
 #include <string>
 
 // ROS
+#include <image_transport/subscriber_filter.hpp>
 #include <message_filters/subscriber.hpp>
 #include <message_filters/sync_policies/approximate_time.hpp>
 #include <message_filters/sync_policies/exact_time.hpp>
@@ -40,11 +41,10 @@
 #include <rclcpp/node.hpp>
 
 // multisensor_calibration
-#include "Extrinsic3d3dCalibrationBase.h"
+#include "Extrinsic2d2dCalibrationBase.h"
 #include "multisensor_calibration/common/common.h"
-#include "multisensor_calibration/config/LidarLidarRegistrationParameters.hpp"
-#include "multisensor_calibration/config/LidarTargetDetectionParameters.hpp"
-#include "multisensor_calibration/sensor_data_processing/LidarDataProcessor.h"
+#include "multisensor_calibration/config/CameraCameraRegistrationParameters.hpp"
+#include "multisensor_calibration/sensor_data_processing/CameraDataProcessor.h"
 
 namespace multisensor_calibration
 {
@@ -54,8 +54,8 @@ namespace multisensor_calibration
  *
  * This subclasses multisensor_calibration::Extrinsic3d3dCalibrationBase.
  */
-class ExtrinsicLidarLidarCalibration
-  : public Extrinsic3d3dCalibrationBase<LidarDataProcessor, LidarDataProcessor>,
+class ExtrinsicCameraCameraCalibration
+  : public Extrinsic2d2dCalibrationBase<CameraDataProcessor, CameraDataProcessor>,
     public rclcpp::Node
 {
 
@@ -64,34 +64,27 @@ class ExtrinsicLidarLidarCalibration
     //==============================================================================
   protected:
     typedef message_filters::sync_policies::ApproximateTime<
-      InputCloud_Message_T, InputCloud_Message_T>
-      CloudCloudApproxSync;
+      InputImage_Message_T, InputImage_Message_T>
+      ImageImageApproxSync;
 
     typedef message_filters::sync_policies::ExactTime<
-      InputCloud_Message_T, InputCloud_Message_T>
-      CloudCloudExactSync;
+      InputImage_Message_T, InputImage_Message_T>
+      ImageImageExactSync;
 
     //==============================================================================
     // CONSTRUCTION / DESTRUCTION
     //==============================================================================
   public:
-    ExtrinsicLidarLidarCalibration(const std::string& nodeName,
-                                   const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
+    ExtrinsicCameraCameraCalibration(const std::string& nodeName,
+                                     const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
 
-    ExtrinsicLidarLidarCalibration(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
+    ExtrinsicCameraCameraCalibration(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
 
-    ~ExtrinsicLidarLidarCalibration() override;
+    ~ExtrinsicCameraCameraCalibration() override;
 
     //==============================================================================
     // METHODS
     //==============================================================================
-    /**
-     * @brief Run the extrinsic calibration based on the last observation of the calibration target.
-     *
-     * This will remove observations without correspondence and estimate a rigid transformation
-     * based on the detected marker corners.
-     */
-    void calibrateLastObservation();
 
     /**
      * @brief Method to receive synchronized sensor data, i.e. LiDAR point clouds from the source
@@ -102,14 +95,44 @@ class ExtrinsicLidarLidarCalibration
      * not. When the target is detected a calibration with the last observation is performed. In
      * this, the observations might be rejected if the error of the calibration is too large.
      *
-     * @param[in] ipSrcCloudMsg Pointer to point cloud message from source sensor that is to be
+     * @param[in] ipSrcImgMsg Pointer to point cloud message from source sensor that is to be
      * calibrated.
-     * @param[in] ipRefCloudMsg Pointer to point cloud message from reference sensor against which
+     * @param[in] ipRefImgMsg Pointer to point cloud message from reference sensor against which
      * the source sensor is to be calibrated.
      */
     void onSensorDataReceived(
-      const InputCloud_Message_T::ConstSharedPtr& ipSrcCloudMsg,
-      const InputCloud_Message_T::ConstSharedPtr& ipRefCloudMsg);
+      const InputImage_Message_T::ConstSharedPtr& ipSrcImgMsg,
+      const InputImage_Message_T::ConstSharedPtr& ipRefImgMsg);
+
+    /**
+     * @brief Initialize camera intrinsics from camera info topics.
+     *
+     * @param[in, out] iopCamProcessor Pointer to camera data processor to which the intrinsics are
+     * to be set.
+     * @return True, if successful. False otherwise.
+     */
+    bool initializeCameraIntrinsics(
+      CameraDataProcessor* iopCamProcessor,
+      sensor_msgs::msg::CameraInfo& cameraInfo,
+      EImageState imageState,
+      std::string cameraInfoTopic);
+
+    /**
+     * @brief Handle reception of camera info message.
+     */
+    void onSrcCameraInfoReceived(const sensor_msgs::msg::CameraInfo::SharedPtr pCamInfo);
+    void onRefCameraInfoReceived(const sensor_msgs::msg::CameraInfo::SharedPtr pCamInfo);
+
+    /**
+     * @brief Handle service call to get camera intrinsics.
+     *
+     * @param[in] ipReq Request, UNUSED.
+     * @param[out] opRes Response.
+     */
+    bool onRequestCameraIntrinsics(
+      const std::shared_ptr<interf::srv::CameraIntrinsics::Request> ipReq,
+      std::shared_ptr<interf::srv::CameraIntrinsics::Response> opRes);
+
     //==============================================================================
     // METHODS: Overrides from parent
     //==============================================================================
@@ -117,6 +140,8 @@ class ExtrinsicLidarLidarCalibration
     bool finalizeCalibration() override;
 
     bool initializeDataProcessors() override;
+
+    bool initializeServices(rclcpp::Node* ipNode) override;
 
     bool initializeSubscribers(rclcpp::Node* ipNode) override;
 
@@ -144,35 +169,32 @@ class ExtrinsicLidarLidarCalibration
     // MEMBERS
     //==============================================================================
   private:
-    /// Object holding parameters for the lidar lidar registration
-    LidarLidarRegistrationParameters registrationParams_;
+    CameraCameraRegistrationParameters registrationParams_;
 
-    /// Object holding parameters for the target detection in LiDAR data
-    LidarTargetDetectionParameters lidarTargetDetectionParams_;
+    std::shared_ptr<message_filters::Synchronizer<ImageImageApproxSync>> pImageImageApproxSync_;
 
-    /// message filter for approximated message synchronization for cloud message data
-    std::shared_ptr<message_filters::Synchronizer<CloudCloudApproxSync>> pCloudCloudApproxSync_;
+    std::shared_ptr<message_filters::Synchronizer<ImageImageExactSync>> pImageImageExactSync_;
 
-    /// message filter for exact message synchronization for cloud message data
-    std::shared_ptr<message_filters::Synchronizer<CloudCloudExactSync>> pCloudCloudExactSync_;
+    image_transport::SubscriberFilter srcImageSubsc_;
 
-    /// Subscriber to point cloud from source sensor
-    message_filters::Subscriber<InputCloud_Message_T> srcCloudSubsc_;
+    image_transport::SubscriberFilter refImageSubsc_;
 
-    /// Subscriber to point cloud from reference sensor
-    message_filters::Subscriber<InputCloud_Message_T> refCloudSubsc_;
-
-    /// Flag to activate the additional alignment of the ground planes.
-    bool alignGroundPlanes_;
-
-    /// ID of a frame that has an upright z-axis to find the ground planes for the alignment.
-    std::string uprightFrameId_;
-
-    /// Queue size for synchronization of image messages and point cloud
+    /// Queue size for synchronization of image messages
     int syncQueueSize_;
 
     /// Flag to activate exact time synchronization
     bool useExactSync_;
+
+    /// State of images
+    EImageState srcImageState_, refImageState_;
+
+    /// Camera info
+    rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr pSrcCamInfoSubsc_, pRefCamInfoSubsc_;
+    std::string srcCameraInfoTopic_, refCameraInfoTopic_;
+    sensor_msgs::msg::CameraInfo srcCameraInfo_, refCameraInfo_;
+
+    /// Service to get camera intrinsics
+    rclcpp::Service<interf::srv::CameraIntrinsics>::SharedPtr pCameraIntrSrv_;
 };
 
 } // namespace multisensor_calibration

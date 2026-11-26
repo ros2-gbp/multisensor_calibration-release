@@ -1,0 +1,88 @@
+ros-lyrical-multisensor-calibration (2.2.1-1trixie) trixie; urgency=high
+
+  * fix: build failure on Lyrical when rviz_common and VTK use different Qt versions
+  * Contributors: Miguel Granero
+
+ -- "Miguel Granero" <miguel.granero@iosb.fraunhofer.de>  Wed, 25 Nov 2026 23:00:00 -0000
+
+ros-lyrical-multisensor-calibration (2.2.0-1trixie) trixie; urgency=high
+
+  * feat: support ROS 2 Kilted and Lyrical (Qt6, OpenCV and rclcpp API updates)
+  * feat: register calibration and guidance nodes as components and add headless camera-LiDAR launch
+  * feat: add 'latest' sync policy (no time synchronization)
+  * feat: reference calibration: import reference points from CSV, add/remove table rows
+  * feat: add ransac_max_iterations and retune LiDAR target detection defaults
+  * refactor: rename executable aggregate_point_cloud to accumulate_point_cloud
+  * fix: crashes on observation removal and when closing the point cloud distance visualizer
+  * fix: infinite wait for calibration metadata and services blocked during data processing
+  * fix: visualizers use best-effort QoS for LiDAR data and the calibration node's sync policy
+  * fix: RANSAC random sampling was reseeded on every call
+  * fix: install camera-camera calibration executable
+  * fix: Wayland compatibility workaround
+  * Contributors: Miguel Granero
+
+ -- "Miguel Granero" <miguel.granero@iosb.fraunhofer.de>  Wed, 25 Nov 2026 23:00:00 -0000
+
+ros-lyrical-multisensor-calibration (2.1.0-1trixie) trixie; urgency=high
+
+  * feat: add camera-camera extrinsic calibration
+  * refactor: clean calibration inheritance structure
+  * Contributors: Miguel Granero
+
+ -- "Miguel Granero" <miguel.granero@iosb.fraunhofer.de>  Sun, 22 Feb 2026 23:00:00 -0000
+
+ros-lyrical-multisensor-calibration (2.0.4-1trixie) trixie; urgency=high
+
+  * refactor: Minor style changes and deprecation removals
+  * Prepare for Kilted + Rolling Release
+  * Contributors: Miguel Granero
+
+ -- "Miguel Granero" <miguel.granero@iosb.fraunhofer.de>  Sun, 28 Sep 2025 22:00:00 -0000
+
+ros-lyrical-multisensor-calibration (2.0.3-1trixie) trixie; urgency=high
+
+  * refactor: remove unused rviz config files
+  * fix: set LICENSE path to own package for bin packaging
+  * feat: add LICENSE file to single packages
+  * Contributors: Miguel Granero
+
+ -- "Miguel Granero" <miguel.granero@iosb.fraunhofer.de>  Thu, 27 Mar 2025 23:00:00 -0000
+
+ros-lyrical-multisensor-calibration (2.0.2-1trixie) trixie; urgency=high
+
+  * feat: create small_gicp_vendor package
+  * fix: export library target
+  * fix: read version from package.xml and not from git
+  * Contributors: Miguel Granero
+
+ -- "Miguel Granero" <miguel.granero@iosb.fraunhofer.de>  Thu, 27 Mar 2025 23:00:00 -0000
+
+ros-lyrical-multisensor-calibration (2.0.1-1trixie) trixie; urgency=high
+
+  * refactor: remove compilation warnings
+  * fix: remove deprecated pointer type
+  * Contributors: Miguel Granero
+
+ -- "Miguel Granero" <miguel.granero@iosb.fraunhofer.de>  Sun, 23 Mar 2025 23:00:00 -0000
+
+ros-lyrical-multisensor-calibration (2.0.0-1trixie) trixie; urgency=high
+
+  * feat: Port of multisensor_calibration to ROS2 Jazzy.
+  * Contributors: Miguel Granero
+
+ -- "Miguel Granero" <miguel.granero@iosb.fraunhofer.de>  Wed, 19 Feb 2025 23:00:00 -0000
+
+ros-lyrical-multisensor-calibration (1.0.0-1trixie) trixie; urgency=high
+
+  * Extrinsic Camera-LiDAR Calibration
+  * Extrinsic Camera-Reference Calibration
+  * Extrinsic LiDAR-LiDAR Calibration
+  * Extrinsic LiDAR-Reference Calibration
+  * Extrinsic LiDAR-Vehicle Calibration (prototype)
+  * Calibration Configurator
+  * Documentation
+  Contributors: Boitumelo Ruf, Miguel Granero, Christian Frese, Raphael Hagmanns, Tom Schmidt
+
+ -- "Miguel Granero" <miguel.granero@iosb.fraunhofer.de>  Mon, 17 Feb 2025 23:00:00 -0000
+
+

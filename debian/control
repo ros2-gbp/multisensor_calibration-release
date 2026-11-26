@@ -1,0 +1,13 @@
+Source: ros-lyrical-multisensor-calibration
+Section: misc
+Priority: optional
+Maintainer: "Miguel Granero" <miguel.granero@iosb.fraunhofer.de>
+Build-Depends: debhelper (>= 9.0.0), libtinyxml2-dev, qt5-qmake, qtbase5-dev, ros-lyrical-ament-cmake, ros-lyrical-ament-cmake-gtest <!nocheck>, ros-lyrical-ament-lint-auto <!nocheck>, ros-lyrical-ament-lint-common <!nocheck>, ros-lyrical-cv-bridge, ros-lyrical-geometry-msgs, ros-lyrical-image-transport, ros-lyrical-multisensor-calibration-interface, ros-lyrical-pcl-conversions, ros-lyrical-pcl-ros, ros-lyrical-rclcpp, ros-lyrical-rclcpp-components, ros-lyrical-rviz-common, ros-lyrical-sensor-msgs, ros-lyrical-small-gicp-vendor, ros-lyrical-std-msgs, ros-lyrical-tf2, ros-lyrical-tf2-ros, ros-lyrical-urdf, ros-lyrical-visualization-msgs, ros-lyrical-ros-workspace
+Homepage: https://index.ros.org/p/multisensor_calibration/#lyrical
+Standards-Version: 3.9.2
+
+Package: ros-lyrical-multisensor-calibration
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libqt5core5t64, libqt5gui5t64, libqt5widgets5t64, libtinyxml2-dev, ros-lyrical-cv-bridge, ros-lyrical-geometry-msgs, ros-lyrical-image-transport, ros-lyrical-multisensor-calibration-interface, ros-lyrical-pcl-conversions, ros-lyrical-pcl-ros, ros-lyrical-rclcpp, ros-lyrical-rclcpp-components, ros-lyrical-rviz-common, ros-lyrical-sensor-msgs, ros-lyrical-small-gicp-vendor, ros-lyrical-std-msgs, ros-lyrical-tf2, ros-lyrical-tf2-ros, ros-lyrical-urdf, ros-lyrical-visualization-msgs, ros-lyrical-ros-workspace
+Description: Collection of methods and applications to calibrate multi-sensor-systems, e.g.
+ camera to LiDAR, LiDAR to LiDAR, and LiDAR to vehicle.

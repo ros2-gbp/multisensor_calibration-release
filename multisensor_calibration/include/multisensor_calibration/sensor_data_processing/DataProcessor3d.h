@@ -29,11 +29,16 @@
 #ifndef MULTISENSORCALIBRATION_DATAPROCESSOR3D_H
 #define MULTISENSORCALIBRATION_DATAPROCESSOR3D_H
 
+// Std
+#include <mutex>
+
 // ROS
 #include <rclcpp/publisher.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/service.hpp>
+#if __has_include(<tf2/LinearMath/Transform.hpp>)
 #include <tf2/LinearMath/Transform.hpp>
+#endif
 
 // PCL
 #include <pcl/filters/filter.h>
@@ -88,6 +93,12 @@ class DataProcessor3d : public SensorDataProcessorBase<pcl::PointCloud<InputPoin
      * @param[in] pTransform Pointer to Transform object.
      */
     void setDataTransform(const std::shared_ptr<tf2::Transform>& pTransform);
+
+    /**
+     * @brief Set mutex of the owning node, which guards the data processing. It is locked in the
+     * service callbacks. To be called prior to initializeServices.
+     */
+    void setProcessingMutex(std::recursive_mutex* ipMutex);
 
     /**
      * @brief Get copy of list holding pointers to point clouds of detected calibration boards.
@@ -269,6 +280,9 @@ class DataProcessor3d : public SensorDataProcessorBase<pcl::PointCloud<InputPoin
     /// Pointer to transform object which can be used transform the Lidar data prior to processing
     /// or the detected data points in post-processing.
     std::shared_ptr<tf2::Transform> pDataTransform_;
+
+    /// Pointer to mutex of the owning node guarding the data processing.
+    std::recursive_mutex* pProcessingMutex_ = nullptr;
 
     /// Pointer to point cloud holding the regions of interest for publishing
     pcl::PointCloud<InputPointType>::Ptr pRoisCloud_;

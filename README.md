@@ -1,3 +1,29 @@
+## multisensor_calibration (kilted) - 2.2.1-1
+
+The packages in the `multisensor_calibration` repository were released into the `kilted` distro by running `/usr/bin/bloom-release --rosdistro kilted multisensor_calibration` on `Thu, 26 Nov 2026 11:36:40 -0000`
+
+These packages were released:
+- `multisensor_calibration`
+- `multisensor_calibration_interface`
+- `small_gicp_vendor`
+
+Version of package(s) in repository `multisensor_calibration`:
+
+- upstream repository: https://github.com/FraunhoferIOSB/multisensor_calibration.git
+- release repository: https://github.com/ros2-gbp/multisensor_calibration-release.git
+- rosdistro version: `2.2.0-1`
+- old version: `2.2.0-1`
+- new version: `2.2.1-1`
+
+Versions of tools used:
+
+- bloom version: `0.14.4`
+- catkin_pkg version: `1.1.1`
+- rosdep version: `0.27.0`
+- rosdistro version: `1.1.0`
+- vcstools version: `0.1.42`
+
+
 ## multisensor_calibration (lyrical) - 2.2.1-1
 
 The packages in the `multisensor_calibration` repository were released into the `lyrical` distro by running `/usr/bin/bloom-release --rosdistro lyrical multisensor_calibration` on `Thu, 26 Nov 2026 11:35:07 -0000`

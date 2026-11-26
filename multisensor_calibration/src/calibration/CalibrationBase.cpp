@@ -113,6 +113,7 @@ bool CalibrationBase::initializeAndStartSensorCalibration(rclcpp::Node* ipNode)
     }
 
     //--- initialize subscribers
+    pSensorDataCbGroup_ = ipNode->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     isSuccessful &= initializeSubscribers(ipNode);
 
     //--- if not successful, print warning and return
@@ -166,6 +167,14 @@ bool CalibrationBase::initializeServices(rclcpp::Node* ipNode)
                 std::placeholders::_1, std::placeholders::_2));
 
     return true;
+}
+
+//==================================================================================================
+rclcpp::SubscriptionOptions CalibrationBase::sensorDataSubscriptionOptions() const
+{
+    rclcpp::SubscriptionOptions options;
+    options.callback_group = pSensorDataCbGroup_;
+    return options;
 }
 
 //==================================================================================================
@@ -285,6 +294,8 @@ rcl_interfaces::msg::SetParametersResult CalibrationBase::
 {
     RCLCPP_DEBUG(logger_, "%s", __PRETTY_FUNCTION__);
 
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
+
     // Return value that holds information on success.
     rcl_interfaces::msg::SetParametersResult retVal;
     retVal.successful = true;
@@ -371,6 +382,21 @@ std::string CalibrationBase::readStringLaunchParameter(const rclcpp::Node* ipNod
     }
 
     return str;
+}
+
+//==================================================================================================
+ESyncPolicy CalibrationBase::readSyncPolicyLaunchParameter(const rclcpp::Node* ipNode) const
+{
+    const std::string policyStr =
+      readStringLaunchParameter(ipNode, "sync_policy", DEFAULT_SYNC_POLICY_STR);
+    auto findItr = STR_2_SYNC_POLICY.find(policyStr);
+    if (findItr != STR_2_SYNC_POLICY.end())
+        return findItr->second;
+
+    RCLCPP_WARN(logger_, "String passed to 'sync_policy' is not valid (exact, approximate, latest). "
+                         "\nSetting 'sync_policy' to default: %s",
+                DEFAULT_SYNC_POLICY_STR.c_str());
+    return STR_2_SYNC_POLICY.at(DEFAULT_SYNC_POLICY_STR);
 }
 
 //==================================================================================================
@@ -498,6 +524,9 @@ bool CalibrationBase::onRequestCalibrationFinalization(
     //--- if calibration counter is greater than 1, i.e. if at least one calibration iteration
     //--- has been performed, trigger finalization. otherwise, do not trigger
 
+    //--- get ownership of mutex
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
+
     //--- finalize calibration
     bool isSuccessful = finalizeCalibration();
 
@@ -533,7 +562,7 @@ bool CalibrationBase::onRequestTargetCapture(
         return false;
 
     //--- get ownership of mutex
-    std::lock_guard<std::mutex> guard(dataProcessingMutex_);
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
 
     //--- store request
     captureCalibrationTarget_ = true;
@@ -554,6 +583,9 @@ bool CalibrationBase::onReset(
   std::shared_ptr<interf::srv::ResetCalibration::Response> opRes)
 {
     UNUSED_VAR(ipReq);
+
+    //--- get ownership of mutex
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
 
     reset();
 

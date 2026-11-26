@@ -43,6 +43,8 @@ sudo apt install ros-$ROS_DISTRO-multisensor-calibration
 
 Or manually. If you want to compile and use locally, see [Getting Started](#getting-started).
 
+The branch `main` targets ROS 2 Lyrical and Kilted. For ROS 2 Jazzy, use the branch [jazzy](https://github.com/FraunhoferIOSB/multisensor_calibration/tree/jazzy).
+
 Since ROS 1 is soon end-of-life, there will be no official release for ROS 1.
 However, there is a version of the source code available for ROS 1 under the branch [noetic](https://github.com/FraunhoferIOSB/multisensor_calibration/tree/noetic).
 
@@ -53,10 +55,12 @@ However, there is a version of the source code available for ROS 1 under the bra
 
 ### Continuous Integration:
 
-| Service    | devel   | main   |
-| ---------- | ------- | ------ |
-| Docs     |         | [![deploy](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/docs.yml/badge.svg)](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/docs.yml) |
-| Build           | [![Jazzy Jalisco](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_jazzy.yml/badge.svg?branch=devel)](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_jazzy.yml)           | [![Jazzy Jalisco](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_jazzy.yml/badge.svg?branch=main)](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_jazzy.yml) |
+| Service    | devel   | main   | jazzy   |
+| ---------- | ------- | ------ | ------- |
+| Docs     |         | [![deploy](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/docs.yml/badge.svg)](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/docs.yml) |         |
+| Build (Kilted)  | [![Kilted Kaiju](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_kilted.yml/badge.svg?branch=devel)](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_kilted.yml) | [![Kilted Kaiju](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_kilted.yml/badge.svg?branch=main)](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_kilted.yml) |         |
+| Build (Lyrical) | [![Lyrical Luth](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_lyrical.yml/badge.svg?branch=devel)](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_lyrical.yml) | [![Lyrical Luth](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_lyrical.yml/badge.svg?branch=main)](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_lyrical.yml) |         |
+| Build (Jazzy)   |         |        | [![Jazzy Jalisco](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_jazzy.yml/badge.svg?branch=jazzy)](https://github.com/FraunhoferIOSB/multisensor_calibration/actions/workflows/build_and_test_jazzy.yml) |
 
 ------------------------
 

@@ -53,8 +53,9 @@ template <class SrcDataProcessorT, class RefDataProcessorT>
 bool ExtrinsicCalibrationBase<SrcDataProcessorT, RefDataProcessorT>::initializePublishers(
   rclcpp::Node* ipNode)
 {
+    //--- transient local so that late-joining subscribers (visualizers, remote UIs) get the last result
     pCalibResultPub_ = ipNode->create_publisher<CalibrationResult_Message_T>(
-      "~/" + CALIB_RESULT_TOPIC_NAME, 10);
+      "~/" + CALIB_RESULT_TOPIC_NAME, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local());
 
     return true;
 }
@@ -67,13 +68,12 @@ bool ExtrinsicCalibrationBase<SrcDataProcessorT, RefDataProcessorT>::onRequestRe
 {
     UNUSED_VAR(ipReq);
 
+    //--- get ownership of mutex
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
+
     //--- if there is a calibration to be removed, remove all observations from this iteration
     if (calibrationItrCnt_ > 1)
     {
-
-        //--- get ownership of mutex
-        std::lock_guard<std::mutex> guard(dataProcessingMutex_);
-
         calibrationItrCnt_--;
 
         pSrcDataProcessor_->removeCalibIteration(calibrationItrCnt_);
@@ -93,7 +93,7 @@ bool ExtrinsicCalibrationBase<SrcDataProcessorT, RefDataProcessorT>::onRequestRe
 
     RCLCPP_INFO(logger_, "%s", opRes->msg.c_str());
 
-    return true;
+    return opRes->is_accepted;
 }
 
 //==================================================================================================
@@ -136,6 +136,9 @@ bool ExtrinsicCalibrationBase<SrcDataProcessorT, RefDataProcessorT>::onRequestCa
     if (!isInitialized_)
         return false;
 
+    //--- get ownership of mutex
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
+
     opRes->calib_type = static_cast<int>(type_);
 
     opRes->robot_ws_path = (fs::exists(pRobotWs_->getPath()))
@@ -167,6 +170,31 @@ bool ExtrinsicCalibrationBase<SrcDataProcessorT, RefDataProcessorT>::onRequestCa
                           !opRes->ref_topic_name.empty() &&
                           !opRes->ref_frame_id.empty());
 
+    if (!opRes->is_complete)
+    {
+        std::string missing;
+        if (opRes->robot_ws_path.empty())
+            missing += "\n\t> robot_ws_path (robot workspace does not exist)";
+        if (opRes->calib_ws_path.empty())
+            missing += "\n\t> calib_ws_path (calibration workspace does not exist)";
+        if (opRes->calib_target_file_path.empty())
+            missing += "\n\t> calib_target_file_path";
+        if (opRes->src_sensor_name.empty())
+            missing += "\n\t> src_sensor_name";
+        if (opRes->src_topic_name.empty())
+            missing += "\n\t> src_topic_name";
+        if (opRes->src_frame_id.empty())
+            missing += "\n\t> src_frame_id (no synchronized sensor data received yet)";
+        if (opRes->ref_sensor_name.empty())
+            missing += "\n\t> ref_sensor_name";
+        if (opRes->ref_topic_name.empty())
+            missing += "\n\t> ref_topic_name";
+        if (opRes->ref_frame_id.empty())
+            missing += "\n\t> ref_frame_id (no synchronized sensor data received yet)";
+
+        RCLCPP_WARN(logger_, "Calibration meta data is incomplete. Missing:%s", missing.c_str());
+    }
+
     return true;
 }
 
@@ -176,6 +204,9 @@ bool ExtrinsicCalibrationBase<SrcDataProcessorT, RefDataProcessorT>::onRequestSe
   const std::shared_ptr<interf::srv::SensorExtrinsics::Request> ipReq,
   std::shared_ptr<interf::srv::SensorExtrinsics::Response> opRes)
 {
+    //--- get ownership of mutex
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
+
     //--- get empty or last sensor extrinsics and convert into tf2::Transform
     lib3d::Extrinsics extrinsics = (sensorExtrinsics_.empty())
                                      ? lib3d::Extrinsics()

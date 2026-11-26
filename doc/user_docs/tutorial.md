@@ -87,8 +87,13 @@ In the following the available options for the different calibration types are p
 - **Use initial guess from TF-Tree?** Use the data provided by the TF-Tree to extract an initial guess for the calibration.
 - **Save Observations?** Save the observations which have been used for the calibration into the calibration workspace.
 
-- **Message Synchronization Policy:** Select which type of time synchronization is to be used to synchronize the sensor messages.
-- **Synchronization Queue Size:** Queue size used for the time synchronization.
+- **Message Synchronization Policy:** Select how the messages of the source and reference sensor are paired:
+  - *Exact Time Synchronization:* Messages with identical time stamps.
+  - *Approximate Time Synchronization (default):* Messages with the closest time stamps.
+  - *Latest Message (No Time Synchronization):* Each source message is paired with the latest reference message, regardless of the time stamps.
+    Use this if the clocks of the sensors are not synchronized.
+    Keep the target and the sensors still while capturing, since the paired messages may be recorded at different times.
+- **Synchronization Queue Size:** Queue size used for the approximate time synchronization.
 
 **Extrinsic LiDAR-LiDAR Calibration**
 
@@ -111,8 +116,13 @@ If true, this also requires the frame ID of an upright frame in order to find th
 - **Use initial guess from TF-Tree?** Use the data provided by the TF-Tree to extract an initial guess for the calibration.
 - **Save Observations?** Save the observations which have been used for the calibration into the calibration workspace.
 
-- **Message Synchronization Policy:** Select which type of time synchronization is to be used to synchronize the sensor messages.
-- **Synchronization Queue Size:** Queue size used for the time synchronization.
+- **Message Synchronization Policy:** Select how the messages of the source and reference sensor are paired:
+  - *Exact Time Synchronization:* Messages with identical time stamps.
+  - *Approximate Time Synchronization (default):* Messages with the closest time stamps.
+  - *Latest Message (No Time Synchronization):* Each source message is paired with the latest reference message, regardless of the time stamps.
+    Use this if the clocks of the sensors are not synchronized.
+    Keep the target and the sensors still while capturing, since the paired messages may be recorded at different times.
+- **Synchronization Queue Size:** Queue size used for the approximate time synchronization.
 
 **Extrinsic Camera-Reference Calibration**
 
@@ -281,7 +291,7 @@ When finished the corresponding sensor data will be annotated with the detection
     At each position, slightly rotate the target inwards. Ideally place the target in a '+' shape in the image space with 5 positions. If not possible, try to place the target at least at 3 positions in a 'L' shape so that the positions are not collinear.
 
 6. For each position **repeat steps 2-4**.
-7. After all target poses were captured in the camera image, fill in reference coordinates of the top-left marker corners in the appropriate table, together with the corresponding ID of the target pose and the corresponding marker ID. To this end, it is assumed that the observed target poses are entered in a contiguous order, starting off with the ID 1. Meaning, that the first position of the target gets the ID 1, the second the ID 2, and so on. Furthermore, for each target pose there are to be 4 markers given. You can also enter the reference coordinated successively while you move the target around, however, it is important that the **observations are only 'applied' once at the end**, when all coordinates have been entered.
+7. After all target poses were captured in the camera image, fill in reference coordinates of the top-left marker corners in the appropriate table, together with the corresponding ID of the target pose and the corresponding marker ID. To this end, it is assumed that the observed target poses are entered in a contiguous order, starting off with the ID 1. Meaning, that the first position of the target gets the ID 1, the second the ID 2, and so on. Furthermore, for each target pose there are to be 4 markers given. Alternatively, the coordinates can be imported from a CSV file with rows of the form 'name, x, y, z' via the context menu of the table ('Import marker coordinates from CSV file...'), after which the target pose ID and marker ID are assigned to each point in a preview dialog. Rows can be added or removed via the same context menu ('Add Row', 'Remove Selected Row(s)'). You can also enter the reference coordinated successively while you move the target around, however, it is important that the **observations are only 'applied' once at the end**, when all coordinates have been entered.
 8. When enough different observations of the calibration target are collected and the reference coordinates of the top-left marker corners have been entered and 'applied', the calibration can be finalized by clicking on **Button 4 'Calibrate'**. This will do a final calibration, print out the resulting extrinsic parameters, overall mean reprojection error, as well as a standard deviation in the target poses when transforming it from the source sensor to the reference sensor. 
 
 *To adjust runtime parameters, e.g. parameters of the algorithm to detect the calibration target or to do the actual calibration algorithm, you can open 'rqt_reconfigure' via 'Edit' -> 'Preferences'.*
@@ -324,7 +334,7 @@ When finished the corresponding sensor data will be annotated with the detection
     In this the positions should make up an 'L' shape, so that a vertical, as well as a horizontal variance is established. Make sure that the positions are not collinear. At each position, slightly rotate the target inwards. 
 
 7. For each position **repeat steps 2-5**.
-8. After all target poses were captured in the camera image, fill in reference coordinates of the top-left marker corners in the appropriate table, together with the corresponding ID of the target pose and the corresponding marker ID. To this end, it is assumed that the observed target poses are entered in a contiguous order, starting off with the ID 1. Meaning, that the first position of the target gets the ID 1, the second the ID 2, and so on. Furthermore, for each target pose there are to be 4 markers given. You can also enter the reference coordinated successively while you move the target around, however, it is important that the **observations are only 'applied' once at the end**, when all coordinates have been entered.
+8. After all target poses were captured in the camera image, fill in reference coordinates of the top-left marker corners in the appropriate table, together with the corresponding ID of the target pose and the corresponding marker ID. To this end, it is assumed that the observed target poses are entered in a contiguous order, starting off with the ID 1. Meaning, that the first position of the target gets the ID 1, the second the ID 2, and so on. Furthermore, for each target pose there are to be 4 markers given. Alternatively, the coordinates can be imported from a CSV file with rows of the form 'name, x, y, z' via the context menu of the table ('Import marker coordinates from CSV file...'), after which the target pose ID and marker ID are assigned to each point in a preview dialog. Rows can be added or removed via the same context menu ('Add Row', 'Remove Selected Row(s)'). You can also enter the reference coordinated successively while you move the target around, however, it is important that the **observations are only 'applied' once at the end**, when all coordinates have been entered.
 9. When enough different observations of the calibration target are collected, the calibration can be finalized by clicking on **Button 4 'Calibrate'**. This will do a final calibration, print out the resulting extrinsic parameters, the overall root mean squared error of the GICP, as well as a standard deviation in the target poses when transforming it from the source sensor to the reference sensor. 
 
 *To adjust runtime parameters, e.g. parameters of the algorithm to detect the calibration target or to do the actual calibration algorithm, you can open 'rqt_reconfigure' via 'Edit' -> 'Preferences'.*

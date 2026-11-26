@@ -164,15 +164,28 @@ void CameraLidarCalibrationGui::loadVisualizer()
               extrinsicPose.orientation.y, extrinsicPose.orientation.z,
               extrinsicPose.orientation.w};
 
-            rclcpp::NodeOptions options;
-
-            options.parameter_overrides({
+            std::vector<rclcpp::Parameter> parameters = {
               rclcpp::Parameter("image_state",
                                 intrinsicResponse.get()->image_state),
               rclcpp::Parameter("min_depth", 0.5),
               rclcpp::Parameter("max_depth", 10.0),
               rclcpp::Parameter("temp_transform", temporaryTransformCoeffs),
-            });
+            };
+
+            //--- use same sync as the calibration node
+            auto paramsClient = std::make_shared<rclcpp::AsyncParametersClient>(pNode_, calibratorNodeName_);
+            auto syncParams   = paramsClient->get_parameters({"sync_policy", "sync_queue_size"});
+            if (utils::doWhileWaiting(pExecutor_, syncParams, [&]()
+                                      { QCoreApplication::processEvents(); }, 100) ==
+                rclcpp::FutureReturnCode::SUCCESS)
+            {
+                for (const auto& param : syncParams.get())
+                    if (param.get_type() != rclcpp::ParameterType::PARAMETER_NOT_SET)
+                        parameters.push_back(param);
+            }
+
+            rclcpp::NodeOptions options;
+            options.parameter_overrides(parameters);
             options.use_intra_process_comms(true);
             std::vector<std::string> remapping_arguments = {
               //   "--ros-args", "--remap",
@@ -257,8 +270,9 @@ bool CameraLidarCalibrationGui::setupGuiElements()
         return false;
     pPlacementGuidanceDialog_->setWindowTitle("Target Placement Guidance");
     pPlacementGuidanceDialog_->move(screenGeometry_.topLeft() + QPoint(screenGeometry_.width() / 2, 0));
-    pPlacementGuidanceDialog_->setFixedSize((screenGeometry_.width() / 2) - 1,
-                                            (screenGeometry_.height() / 2) - titleBarHeight_ - 1);
+    pPlacementGuidanceDialog_->setMinimumSize(400, 300);
+    pPlacementGuidanceDialog_->resize((screenGeometry_.width() / 2) - 1,
+                                      (screenGeometry_.height() / 2) - titleBarHeight_ - 1);
     pCalibControlWindow_->attachPlacementGuidanceDialog(pPlacementGuidanceDialog_.get());
     pPlacementGuidanceDialog_->show();
 
@@ -268,8 +282,9 @@ bool CameraLidarCalibrationGui::setupGuiElements()
         return false;
     pCameraTargetDialog_->setWindowTitle("Camera Target Detections");
     pCameraTargetDialog_->move(screenGeometry_.topLeft() + QPoint(0, (screenGeometry_.height() / 2) + (2 * titleBarHeight_)));
-    pCameraTargetDialog_->setFixedSize((screenGeometry_.width() / 2) - 1,
-                                       (screenGeometry_.height() / 2) - titleBarHeight_ - 1);
+    pCameraTargetDialog_->setMinimumSize(400, 300);
+    pCameraTargetDialog_->resize((screenGeometry_.width() / 2) - 1,
+                                  (screenGeometry_.height() / 2) - titleBarHeight_ - 1);
 
     pCalibControlWindow_->attachSourceDialog(pCameraTargetDialog_.get());
     pCameraTargetDialog_->show();
@@ -281,8 +296,9 @@ bool CameraLidarCalibrationGui::setupGuiElements()
     pLidarTargetDialog_->setWindowTitle("LiDAR Target Detections");
     pLidarTargetDialog_->move(screenGeometry_.topLeft() + QPoint(screenGeometry_.width() / 2,
                                                                  (screenGeometry_.height() / 2) + (2 * titleBarHeight_)));
-    pLidarTargetDialog_->setFixedSize((screenGeometry_.width() / 2) - 1,
-                                      (screenGeometry_.height() / 2) - titleBarHeight_ - 1);
+    pLidarTargetDialog_->setMinimumSize(400, 300);
+    pLidarTargetDialog_->resize((screenGeometry_.width() / 2) - 1,
+                                 (screenGeometry_.height() / 2) - titleBarHeight_ - 1);
     pCalibControlWindow_->attachReferenceDialog(pLidarTargetDialog_.get());
     pLidarTargetDialog_->show();
 

@@ -21,7 +21,9 @@
 
 // ROS
 #include <memory>
+#if __has_include(<tf2/LinearMath/Transform.hpp>)
 #include <tf2/LinearMath/Transform.hpp>
+#endif
 
 // Qt
 #include <QFile>
@@ -47,7 +49,7 @@ ExtrinsicCameraCameraCalibration::ExtrinsicCameraCameraCalibration(
     STEREO_CAMERA_CALIBRATION),
   rclcpp::Node(nodeName, options),
   syncQueueSize_(DEFAULT_SYNC_QUEUE_SIZE),
-  useExactSync_(false)
+  syncPolicy_(APPROXIMATE_SYNC)
 {
     CalibrationBase::init(this);
 }
@@ -67,6 +69,7 @@ ExtrinsicCameraCameraCalibration::~ExtrinsicCameraCameraCalibration()
 {
     pImageImageApproxSync_.reset();
     pImageImageExactSync_.reset();
+    pImageImageLatestSync_.reset();
     pSrcDataProcessor_.reset();
     pRefDataProcessor_.reset();
 }
@@ -287,19 +290,23 @@ bool ExtrinsicCameraCameraCalibration::initializeSubscribers(rclcpp::Node* ipNod
       srcCameraInfoTopic_, 1,
       std::bind(&ExtrinsicCameraCameraCalibration::onSrcCameraInfoReceived,
                 this,
-                std::placeholders::_1));
+                std::placeholders::_1),
+      sensorDataSubscriptionOptions());
     pRefCamInfoSubsc_ = ipNode->create_subscription<sensor_msgs::msg::CameraInfo>(
       refCameraInfoTopic_, 1,
       std::bind(&ExtrinsicCameraCameraCalibration::onRefCameraInfoReceived,
                 this,
-                std::placeholders::_1));
+                std::placeholders::_1),
+      sensorDataSubscriptionOptions());
 
     //--- subscribe to topics
-    srcImageSubsc_.subscribe(ipNode, srcTopicName_, "raw");
-    refImageSubsc_.subscribe(ipNode, refTopicName_, "raw");
+    srcImageSubsc_.subscribe(ipNode, srcTopicName_, "raw", rmw_qos_profile_default,
+                             sensorDataSubscriptionOptions());
+    refImageSubsc_.subscribe(ipNode, refTopicName_, "raw", rmw_qos_profile_default,
+                             sensorDataSubscriptionOptions());
 
     //--- initialize synchronizers
-    if (useExactSync_)
+    if (syncPolicy_ == EXACT_SYNC)
     {
         pImageImageExactSync_ =
           std::make_shared<message_filters::Synchronizer<ImageImageExactSync>>(
@@ -307,6 +314,14 @@ bool ExtrinsicCameraCameraCalibration::initializeSubscribers(rclcpp::Node* ipNod
         pImageImageExactSync_->registerCallback(
           std::bind(&ExtrinsicCameraCameraCalibration::onSensorDataReceived, this,
                     std::placeholders::_1, std::placeholders::_2));
+    }
+    else if (syncPolicy_ == LATEST_SYNC)
+    {
+        pImageImageLatestSync_ =
+          std::make_shared<LatestMessageSync<InputImage_Message_T, InputImage_Message_T>>(
+            srcImageSubsc_, refImageSubsc_,
+            std::bind(&ExtrinsicCameraCameraCalibration::onSensorDataReceived, this,
+                      std::placeholders::_1, std::placeholders::_2));
     }
     else
     {
@@ -369,6 +384,9 @@ bool ExtrinsicCameraCameraCalibration::onRequestCameraIntrinsics(
 {
     UNUSED_VAR(ipReq);
 
+    //--- get ownership of mutex
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
+
     lib3d::Intrinsics cameraIntr;
     if (!isInitialized_ || pSrcDataProcessor_ == nullptr)
         cameraIntr = lib3d::Intrinsics();
@@ -405,8 +423,14 @@ bool ExtrinsicCameraCameraCalibration::onRequestRemoveObservation(
   const std::shared_ptr<interf::srv::RemoveLastObservation::Request> ipReq,
   std::shared_ptr<interf::srv::RemoveLastObservation::Response> opRes)
 {
+    //--- get ownership of mutex
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
+
     if (ExtrinsicCalibrationBase<CameraDataProcessor, CameraDataProcessor>::onRequestRemoveObservation(ipReq, opRes))
+    {
         sensorExtrinsics_.pop_back();
+        ExtrinsicCalibrationBase::publishLastCalibrationResult();
+    }
     else
         return false;
 
@@ -464,7 +488,7 @@ void ExtrinsicCameraCameraCalibration::onSensorDataReceived(
     }
 
     //--- get ownership of mutex
-    std::lock_guard<std::mutex> guard(dataProcessingMutex_);
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
 
     //--- convert input messages to data
     bool isConversionSuccessful = true;
@@ -606,11 +630,8 @@ bool ExtrinsicCameraCameraCalibration::saveCalibrationSettingsToWorkspace()
     pCalibSettings->setValue("misc/sync_queue_size",
                              QVariant::fromValue(syncQueueSize_));
 
-    pCalibSettings->setValue("misc/use_exact_sync",
-                             QVariant::fromValue(useExactSync_));
-
-    pCalibSettings->setValue("misc/intrinsic_calibration",
-                             QVariant::fromValue(useExactSync_));
+    pCalibSettings->setValue("misc/sync_policy",
+                             QString::fromStdString(SYNC_POLICY_2_STR.at(syncPolicy_)));
 
     pCalibSettings->sync();
 
@@ -700,13 +721,15 @@ void ExtrinsicCameraCameraCalibration::setupLaunchParameters(rclcpp::Node* ipNod
     ipNode->declare_parameter<int>("sync_queue_size", DEFAULT_SYNC_QUEUE_SIZE,
                                    syncQueueDesc);
 
-    //--- exact sync
-    auto exactSyncDesc = rcl_interfaces::msg::ParameterDescriptor{};
-    exactSyncDesc.description =
-      "Set to true if an exact time synchronization between the camera image messages\n"
-      "Default: false";
-    syncQueueDesc.read_only = true;
-    ipNode->declare_parameter<bool>("use_exact_sync", false, exactSyncDesc);
+    //--- sync policy
+    auto syncPolicyDesc = rcl_interfaces::msg::ParameterDescriptor{};
+    syncPolicyDesc.description =
+      "Synchronization of the source and reference camera image messages: 'exact' (exact time), "
+      "'approximate' (approximate time) or 'latest' (no time synchronization, each source image "
+      "is paired with the latest reference image).\n"
+      "Default: approximate";
+    syncPolicyDesc.read_only = true;
+    ipNode->declare_parameter<std::string>("sync_policy", DEFAULT_SYNC_POLICY_STR, syncPolicyDesc);
 }
 
 //==================================================================================================
@@ -776,8 +799,8 @@ bool ExtrinsicCameraCameraCalibration::readLaunchParameters(const rclcpp::Node* 
     syncQueueSize_ = CalibrationBase::readNumericLaunchParameter<int>(
       ipNode, "sync_queue_size", DEFAULT_SYNC_QUEUE_SIZE, 1, INT_MAX);
 
-    //--- exact sync
-    useExactSync_ = ipNode->get_parameter("use_exact_sync").as_bool();
+    //--- sync policy
+    syncPolicy_ = CalibrationBase::readSyncPolicyLaunchParameter(ipNode);
 
     return true;
 }
@@ -817,7 +840,7 @@ bool ExtrinsicCameraCameraCalibration::shutdownSubscribers()
         return false;
 
     //--- get ownership of mutex
-    std::lock_guard<std::mutex> guard(CalibrationBase::dataProcessingMutex_);
+    std::lock_guard<std::recursive_mutex> guard(CalibrationBase::dataProcessingMutex_);
 
     //--- unsubscribe subscribers
     srcImageSubsc_.unsubscribe();

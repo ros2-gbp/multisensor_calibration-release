@@ -38,7 +38,9 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/service.hpp>
 #include <rclcpp/subscription.hpp>
+#if __has_include(<tf2/LinearMath/Transform.hpp>)
 #include <tf2/LinearMath/Transform.hpp>
+#endif
 
 // OpenCV
 #include <opencv2/core.hpp>
@@ -185,7 +187,7 @@ class ExtrinsicLidarVehicleCalibration
 
     /// Mutex guarding the processing of sensor data.
     /// This is a reference to CalibrationBase::dataProcessingMutex_
-    std::mutex& sensorDataProcessingMutex_;
+    std::recursive_mutex& sensorDataProcessingMutex_;
 
     /// Mutex guarding the processing of reference data.
     std::mutex refDataProcessingMutex_;

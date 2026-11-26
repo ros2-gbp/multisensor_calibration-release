@@ -27,7 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-cmake_minimum_required(VERSION 3.9.0)
+cmake_minimum_required(VERSION 3.16)
 
 # get version from package.xml
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.xml" package_xml_str)
@@ -69,6 +69,14 @@ endif()
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wall -Wextra -Wpedantic -Wdeprecated -fPIC)
     add_compile_options(-Wno-array-bounds)
+    # Qt6 QFlags uses private member 'i' in template bodies; GCC 13+ -Wpedantic flags this
+    add_compile_options(-Wno-template-body)
+endif()
+
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+    set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
 endif()
 
 # suppress developer warnings
@@ -82,6 +90,15 @@ find_package(rclcpp_components REQUIRED)
 
 find_package(cv_bridge REQUIRED)
 find_package(image_transport REQUIRED)
+
+# VTK 9.5 (pulled by PCL) declares VTK::jsoncpp with interface dep JsonCpp::JsonCpp,
+# but that target only exists after jsoncpp is found. Pre-find it here so the alias
+# is in scope before PCLConfig.cmake loads VTK-targets.cmake.
+find_package(jsoncpp QUIET)
+if(TARGET jsoncpp_lib AND NOT TARGET JsonCpp::JsonCpp)
+    add_library(JsonCpp::JsonCpp ALIAS jsoncpp_lib)
+endif()
+
 find_package(pcl_ros REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(tf2 REQUIRED)
@@ -107,7 +124,16 @@ find_package(small_gicp REQUIRED)
 
 find_package(OpenMP)
 
-find_package(QT NAMES Qt5 REQUIRED COMPONENTS Core Gui Widgets)
+# Use the same Qt major version that rviz_common (and the rest of the ROS stack)
+# was compiled against — avoids mixing Qt5 and Qt6 targets in the same binary.
+if(TARGET Qt6::Core)
+    set(QT_VERSION_MAJOR 6)
+elseif(TARGET Qt5::Core)
+    set(QT_VERSION_MAJOR 5)
+else()
+    # Nothing loaded Qt yet; fall back to the normal detection order
+    find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Gui Widgets)
+endif()
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets)
 
 # setup qt
@@ -127,12 +153,6 @@ set(COMMON_COMPILE_DEFINITIONS
     -DVERSION_MINOR=${VERSION_MINOR}
     -DVERSION_PATCH=${VERSION_PATCH}
     -DPCL_NO_PRECOMPILE
-    -DMULTI_SENSOR_CALIBRATION_TARGET=0
-    -DEXTRINSIC_CAMERA_LIDAR_CALIBRATION_TARGET=1
-    -DEXTRINSIC_LIDAR_LIDAR_CALIBRATION_TARGET=2
-    -DEXTRINSIC_CAMERA_REFERENCE_CALIBRATION_TARGET=3
-    -DEXTRINSIC_LIDAR_REFERENCE_CALIBRATION_TARGET=4
-    -DEXTRINSIC_LIDAR_VEHICLE_CALIBRATION_TARGET=5
     -DSMALL_GICP_HEAD_COMMIT_HASH="${small_gicp_VERSION}"
 )
 
@@ -162,7 +182,6 @@ set(DEPENDENCIES
   visualization_msgs
   multisensor_calibration_interface
   small_gicp
-  small_gicp_vendor
 )
 
 
@@ -192,6 +211,7 @@ set(LIBRARY_MOC_HEADER_FILES
     "${CMAKE_CURRENT_LIST_DIR}/include/multisensor_calibration/ui/LidarLidarCalibrationGui.h"
     "${CMAKE_CURRENT_LIST_DIR}/include/multisensor_calibration/ui/CameraReferenceCalibrationGui.h"
     "${CMAKE_CURRENT_LIST_DIR}/include/multisensor_calibration/ui/ObservationsViewDialog.h"
+    "${CMAKE_CURRENT_LIST_DIR}/include/multisensor_calibration/ui/ImportReferencePointsDialog.h"
     "${CMAKE_CURRENT_LIST_DIR}/include/multisensor_calibration/ui/LidarReferenceCalibrationGui.h"
     "${CMAKE_CURRENT_LIST_DIR}/include/multisensor_calibration/ui/ExtrinsicCameraLidarConfigWidget.h"
     "${CMAKE_CURRENT_LIST_DIR}/include/multisensor_calibration/ui/ExtrinsicCameraReferenceConfigWidget.h"
@@ -231,29 +251,64 @@ add_library(${LIBRARY_TARGET_NAME} SHARED
     ${LIBRARY_UI_FILES}
     ${QRC_SRC_FILES}
 )
-target_link_libraries(${LIBRARY_TARGET_NAME}
+target_link_libraries(${LIBRARY_TARGET_NAME} PRIVATE
     ${OpenCV_LIBRARIES}
     pcl_visualization
-    small_gicp::small_gicp
     Qt${QT_VERSION_MAJOR}::Core
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Gui
 )
+# small_gicp headers are used in public headers (CalibrationTargetSacModel.h),
+# so the include path must propagate to consumers of this library.
+target_link_libraries(${LIBRARY_TARGET_NAME} PUBLIC
+    small_gicp::small_gicp
+)
 if(OpenMP_CXX_FOUND)
-    target_link_libraries(${LIBRARY_TARGET_NAME} OpenMP::OpenMP_CXX)
+    target_link_libraries(${LIBRARY_TARGET_NAME} PRIVATE OpenMP::OpenMP_CXX)
 endif()
 target_compile_definitions(${LIBRARY_TARGET_NAME} PRIVATE
     -DTARGET_NAME="${LIBRARY_TARGET_NAME}"
     ${COMMON_COMPILE_DEFINITIONS}
 )
-ament_target_dependencies(${LIBRARY_TARGET_NAME}
-    ${DEPENDENCIES}
+target_link_libraries(${LIBRARY_TARGET_NAME} PUBLIC
+    rclcpp::rclcpp
+    rclcpp_components::component_manager
+    cv_bridge::cv_bridge
+    image_transport::image_transport
+    pcl_ros::pcl_ros_tf
+    tf2::tf2
+    tf2_ros::tf2_ros
+    tinyxml2::tinyxml2
+    urdf::urdf
+    rviz_common::rviz_common
+    ${std_msgs_TARGETS}
+    ${sensor_msgs_TARGETS}
+    ${geometry_msgs_TARGETS}
+    ${visualization_msgs_TARGETS}
+    ${multisensor_calibration_interface_TARGETS}
+)
+# pcl_conversions is a proper imported target in Lyrical but header-only (no target) in Jazzy
+if(TARGET pcl_conversions::pcl_conversions)
+    target_link_libraries(${LIBRARY_TARGET_NAME} PUBLIC pcl_conversions::pcl_conversions)
+endif()
+set_target_properties(${LIBRARY_TARGET_NAME} PROPERTIES
+    UNITY_BUILD ON
+    UNITY_BUILD_BATCH_SIZE 8
 )
 ament_export_targets(export_${LIBRARY_TARGET_NAME} HAS_LIBRARY_TARGET)
-ament_export_dependencies(${DEPENDENCIES})
+ament_export_dependencies(${DEPENDENCIES})  # kept for ament consumers; CMake consumers use the exported target directly
 
 rclcpp_components_register_nodes(${LIBRARY_TARGET_NAME} "multisensor_calibration::visualizers::PointCloud2PointCloudDistanceNode")
 rclcpp_components_register_nodes(${LIBRARY_TARGET_NAME} "multisensor_calibration::visualizers::PointCloud2ImageNode")
+rclcpp_components_register_nodes(${LIBRARY_TARGET_NAME}
+    "multisensor_calibration::ExtrinsicCameraLidarCalibration"
+    "multisensor_calibration::ExtrinsicCameraReferenceCalibration"
+    "multisensor_calibration::ExtrinsicLidarLidarCalibration"
+    "multisensor_calibration::ExtrinsicLidarReferenceCalibration"
+    "multisensor_calibration::ExtrinsicCameraCameraCalibration"
+    "multisensor_calibration::GuidedCameraLidarTargetPlacementNode"
+    "multisensor_calibration::GuidedLidarLidarTargetPlacementNode"
+)
 
 ######################################
 # extrinsic_camera_lidar_calibration
@@ -261,12 +316,11 @@ rclcpp_components_register_nodes(${LIBRARY_TARGET_NAME} "multisensor_calibration
 set(CAMERA_LIDAR_CALIB_NODE_TARGET_NAME extrinsic_camera_lidar_calibration)
 add_executable(${CAMERA_LIDAR_CALIB_NODE_TARGET_NAME}
     src/nodes/CalibrationNode.cpp
-    ${QRC_SRC_FILES}
 )
 target_compile_definitions(${CAMERA_LIDAR_CALIB_NODE_TARGET_NAME} PRIVATE
     ${COMMON_COMPILE_DEFINITIONS}
     -DTARGET_NAME="${CAMERA_LIDAR_CALIB_NODE_TARGET_NAME}"
-    -DTARGET=EXTRINSIC_CAMERA_LIDAR_CALIBRATION_TARGET                     # see COMMON_COMPILE_DEFINITIONS for enum
+    -DCALIBRATION_APP_TYPE=EXTRINSIC_CAMERA_LIDAR_CALIBRATION
 )
 target_link_libraries(${CAMERA_LIDAR_CALIB_NODE_TARGET_NAME}
     ${LIBRARY_TARGET_NAME}
@@ -282,12 +336,11 @@ target_link_libraries(${CAMERA_LIDAR_CALIB_NODE_TARGET_NAME}
 set(CAMERA_REFERENCE_CALIB_NODE_TARGET_NAME extrinsic_camera_reference_calibration)
 add_executable(${CAMERA_REFERENCE_CALIB_NODE_TARGET_NAME}
     src/nodes/CalibrationNode.cpp
-    ${QRC_SRC_FILES}
 )
 target_compile_definitions(${CAMERA_REFERENCE_CALIB_NODE_TARGET_NAME} PRIVATE
     ${COMMON_COMPILE_DEFINITIONS}
     -DTARGET_NAME="${CAMERA_REFERENCE_CALIB_NODE_TARGET_NAME}"
-    -DTARGET=EXTRINSIC_CAMERA_REFERENCE_CALIBRATION_TARGET                   # see COMMON_COMPILE_DEFINITIONS for enum
+    -DCALIBRATION_APP_TYPE=EXTRINSIC_CAMERA_REFERENCE_CALIBRATION
 )
 target_link_libraries(${CAMERA_REFERENCE_CALIB_NODE_TARGET_NAME}
     ${LIBRARY_TARGET_NAME}
@@ -303,12 +356,11 @@ target_link_libraries(${CAMERA_REFERENCE_CALIB_NODE_TARGET_NAME}
 set(LIDAR_LIDAR_CALIB_NODE_TARGET_NAME extrinsic_lidar_lidar_calibration)
 add_executable(${LIDAR_LIDAR_CALIB_NODE_TARGET_NAME}
     src/nodes/CalibrationNode.cpp
-    ${QRC_SRC_FILES}
 )
 target_compile_definitions(${LIDAR_LIDAR_CALIB_NODE_TARGET_NAME} PRIVATE
     ${COMMON_COMPILE_DEFINITIONS}
     -DTARGET_NAME="${LIDAR_LIDAR_CALIB_NODE_TARGET_NAME}"
-    -DTARGET=EXTRINSIC_LIDAR_LIDAR_CALIBRATION_TARGET                     # see COMMON_COMPILE_DEFINITIONS for enum
+    -DCALIBRATION_APP_TYPE=EXTRINSIC_LIDAR_LIDAR_CALIBRATION
 )
 target_link_libraries(${LIDAR_LIDAR_CALIB_NODE_TARGET_NAME}
     ${LIBRARY_TARGET_NAME}
@@ -324,12 +376,11 @@ target_link_libraries(${LIDAR_LIDAR_CALIB_NODE_TARGET_NAME}
 set(LIDAR_REFERENCE_CALIB_NODE_TARGET_NAME extrinsic_lidar_reference_calibration)
 add_executable(${LIDAR_REFERENCE_CALIB_NODE_TARGET_NAME}
     src/nodes/CalibrationNode.cpp
-    ${QRC_SRC_FILES}
 )
 target_compile_definitions(${LIDAR_REFERENCE_CALIB_NODE_TARGET_NAME} PRIVATE
     ${COMMON_COMPILE_DEFINITIONS}
     -DTARGET_NAME="${LIDAR_REFERENCE_CALIB_NODE_TARGET_NAME}"
-    -DTARGET=EXTRINSIC_LIDAR_REFERENCE_CALIBRATION_TARGET                 # see COMMON_COMPILE_DEFINITIONS for enum
+    -DCALIBRATION_APP_TYPE=EXTRINSIC_LIDAR_REFERENCE_CALIBRATION
 )
 target_link_libraries(${LIDAR_REFERENCE_CALIB_NODE_TARGET_NAME}
     ${LIBRARY_TARGET_NAME}
@@ -345,12 +396,11 @@ target_link_libraries(${LIDAR_REFERENCE_CALIB_NODE_TARGET_NAME}
 set(CAMERA_CAMERA_CALIB_NODE_TARGET_NAME extrinsic_camera_camera_calibration)
 add_executable(${CAMERA_CAMERA_CALIB_NODE_TARGET_NAME}
     src/nodes/CalibrationNode.cpp
-    ${QRC_SRC_FILES}
 )
 target_compile_definitions(${CAMERA_CAMERA_CALIB_NODE_TARGET_NAME} PRIVATE
     ${COMMON_COMPILE_DEFINITIONS}
     -DTARGET_NAME="${CAMERA_CAMERA_CALIB_NODE_TARGET_NAME}"
-    -DTARGET=STEREO_CAMERA_CALIBRATION                     # see COMMON_COMPILE_DEFINITIONS for enum
+    -DCALIBRATION_APP_TYPE=EXTRINSIC_CAMERA_CAMERA_CALIBRATION
 )
 target_link_libraries(${CAMERA_CAMERA_CALIB_NODE_TARGET_NAME}
     ${LIBRARY_TARGET_NAME}
@@ -366,12 +416,11 @@ target_link_libraries(${CAMERA_CAMERA_CALIB_NODE_TARGET_NAME}
 set(MULTI_SENSOR_CALIB_NODE_TARGET_NAME multi_sensor_calibration)
 add_executable(${MULTI_SENSOR_CALIB_NODE_TARGET_NAME}
     src/nodes/CalibrationNode.cpp
-    ${QRC_SRC_FILES}
 )
 target_compile_definitions(${MULTI_SENSOR_CALIB_NODE_TARGET_NAME} PRIVATE
     ${COMMON_COMPILE_DEFINITIONS}
     -DTARGET_NAME="${MULTI_SENSOR_CALIB_NODE_TARGET_NAME}"
-    -DTARGET=MULTI_SENSOR_CALIBRATION_TARGET                     # see COMMON_COMPILE_DEFINITIONS for enum
+    -DCALIBRATION_APP_TYPE=MULTI_SENSOR_CALIBRATION
 )
 target_link_libraries(${MULTI_SENSOR_CALIB_NODE_TARGET_NAME}
     ${LIBRARY_TARGET_NAME}
@@ -386,7 +435,6 @@ target_link_libraries(${MULTI_SENSOR_CALIB_NODE_TARGET_NAME}
 set(INIT_ROBOT_WS_NODE_TARGET_NAME initialize_robot_workspace)
 add_executable(${INIT_ROBOT_WS_NODE_TARGET_NAME}
     src/nodes/InitializeRobotWsNode.cpp
-    ${QRC_SRC_FILES}
 )
 target_link_libraries(${INIT_ROBOT_WS_NODE_TARGET_NAME}
     ${LIBRARY_TARGET_NAME}
@@ -412,15 +460,15 @@ target_link_libraries(${PUB_PC_NODE_TARGET_NAME}
 )
 
 ######################################
-# aggregate_point_cloud
+# accumulate_point_cloud
 ######################################
-set(AGGREGATE_PC_NODE_TARGET_NAME aggregate_point_cloud)
-add_executable(${AGGREGATE_PC_NODE_TARGET_NAME} src/nodes/AggregatePointCloudNode.cpp)
-target_compile_definitions(${AGGREGATE_PC_NODE_TARGET_NAME} PRIVATE
+set(ACCUMULATE_PC_NODE_TARGET_NAME accumulate_point_cloud)
+add_executable(${ACCUMULATE_PC_NODE_TARGET_NAME} src/nodes/AccumulatePointCloudNode.cpp)
+target_compile_definitions(${ACCUMULATE_PC_NODE_TARGET_NAME} PRIVATE
     ${COMMON_COMPILE_DEFINITIONS}
-    -DTARGET_NAME="${AGGREGATE_PC_NODE_TARGET_NAME}"                   # see COMMON_COMPILE_DEFINITIONS for enum
+    -DTARGET_NAME="${ACCUMULATE_PC_NODE_TARGET_NAME}"
 )
-target_link_libraries(${AGGREGATE_PC_NODE_TARGET_NAME}
+target_link_libraries(${ACCUMULATE_PC_NODE_TARGET_NAME}
     ${LIBRARY_TARGET_NAME}
 )
 
@@ -441,11 +489,11 @@ install(TARGETS
     ${CAMERA_REFERENCE_CALIB_NODE_TARGET_NAME}
     ${LIDAR_LIDAR_CALIB_NODE_TARGET_NAME}
     ${LIDAR_REFERENCE_CALIB_NODE_TARGET_NAME}
+    ${CAMERA_CAMERA_CALIB_NODE_TARGET_NAME}
     ${MULTI_SENSOR_CALIB_NODE_TARGET_NAME}
-    ${LIDAR_VEHICLE_CALIB_NODE_TARGET_NAME}
     ${INIT_ROBOT_WS_NODE_TARGET_NAME}
     ${PUB_PC_NODE_TARGET_NAME}
-    ${AGGREGATE_PC_NODE_TARGET_NAME}
+    ${ACCUMULATE_PC_NODE_TARGET_NAME}
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -468,6 +516,33 @@ if(BUILD_TESTING)
     #   ament_flake8()
     #   find_package(ament_cmake_lint_cmake REQUIRED)
     #   ament_lint_cmake()
+
+    find_package(ament_cmake_gtest REQUIRED)
+
+    set(TEST_TARGET_NAMES
+        test_calibration_target
+        test_extrinsic_solvers
+        test_lib3d
+        test_reference_points_csv_reader
+        test_utils
+        test_workspace
+    )
+
+    foreach(TEST_TARGET_NAME ${TEST_TARGET_NAMES})
+        ament_add_gtest(${TEST_TARGET_NAME} test/${TEST_TARGET_NAME}.cpp)
+        target_compile_definitions(${TEST_TARGET_NAME} PRIVATE
+            ${COMMON_COMPILE_DEFINITIONS}
+            -DTARGET_NAME="${TEST_TARGET_NAME}"
+            -DTEST_DATA_DIR="${CMAKE_CURRENT_LIST_DIR}/cfg"
+        )
+        # OpenCV, PCL and Qt are PRIVATE dependencies of the library target and
+        # thus need to be linked explicitly.
+        target_link_libraries(${TEST_TARGET_NAME}
+            ${LIBRARY_TARGET_NAME}
+            ${OpenCV_LIBRARIES}
+            Qt${QT_VERSION_MAJOR}::Core
+        )
+    endforeach()
 endif()
 
 ament_package()

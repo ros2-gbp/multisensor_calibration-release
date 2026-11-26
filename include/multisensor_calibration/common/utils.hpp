@@ -31,10 +31,12 @@
 
 // STD
 #include <cstdint>
+#include <rclcpp/executors/single_threaded_executor.hpp>
 #define USE_MATH_DEFINES
 #include <cmath>
 #include <filesystem>
 #include <functional>
+#include <random>
 
 // Eigen
 #include <Eigen/SVD>
@@ -45,7 +47,21 @@
 #include <geometry_msgs/msg/pose.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
-#include <tf2/LinearMath/Transform.hpp>
+#if __has_include(<tf2/LinearMath/Transform.hpp>)
+  #include <tf2/LinearMath/Transform.hpp>
+#elif __has_include(<tf2/LinearMath/Transform.h>)
+  #include <tf2/LinearMath/Transform.h>
+#elif !defined(TF2_LINEAR_MATH_COMPAT_DEFINED)
+  #define TF2_LINEAR_MATH_COMPAT_DEFINED
+  // tf2 dropped its Bullet LinearMath re-exports; include Bullet directly.
+  #include <bullet/LinearMath/btTransform.h>
+  namespace tf2 {
+    using Transform  = btTransform;
+    using Vector3    = btVector3;
+    using Quaternion = btQuaternion;
+    using Matrix3x3  = btMatrix3x3;
+  }
+#endif
 
 // PCL
 #include <pcl/common/common.h>
@@ -1015,9 +1031,8 @@ inline void cvtTfTransform2GeometryTransform(const tf2::Transform& iTransform,
 inline float drawRandomFloat()
 {
     //--- draw a random float number in the range of 0,1 (inclusively)
-    std::srand(time(NULL));
-    float rand_float = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    return rand_float;
+    static thread_local std::mt19937 generator(std::random_device{}());
+    return std::uniform_real_distribution<float>(0.f, 1.f)(generator);
 }
 /************************************************************************************************/
 /**
@@ -1187,9 +1202,12 @@ inline std::map<std::string, std::vector<std::string>> getTopicList(const uint32
 
     auto last = node->now().nanoseconds();
 
+    rclcpp::executors::SingleThreadedExecutor executor;
+    executor.add_node(node);
+
     while (node->now().nanoseconds() - last < nanoSecondsToAccum)
     {
-        rclcpp::spin_some(node);
+        executor.spin_some();
     }
 
     topics_info = node->get_topic_names_and_types();

@@ -51,8 +51,9 @@ ExtrinsicCameraLidarCalibration::
   rclcpp::Node(nodeName, options),
   pImgCloudApproxSync_(nullptr),
   pImgCloudExactSync_(nullptr),
+  pImgCloudLatestSync_(nullptr),
   syncQueueSize_(DEFAULT_SYNC_QUEUE_SIZE),
-  useExactSync_(false),
+  syncPolicy_(APPROXIMATE_SYNC),
   pFrustumCullingFilters_()
 {
     CalibrationBase::init(this);
@@ -73,6 +74,7 @@ ExtrinsicCameraLidarCalibration::~ExtrinsicCameraLidarCalibration()
     //--- disconnection of callbacks.
     pImgCloudApproxSync_.reset();
     pImgCloudExactSync_.reset();
+    pImgCloudLatestSync_.reset();
     pSrcDataProcessor_.reset();
     pRefDataProcessor_.reset();
 }
@@ -280,6 +282,7 @@ bool ExtrinsicCameraLidarCalibration::initializeDataProcessors()
     pSrcDataProcessor_->initializePublishers(this);
 
     //--- set data to lidar data processor
+    pRefDataProcessor_->setProcessingMutex(&dataProcessingMutex_);
     pRefDataProcessor_->initializeServices(this);
     pRefDataProcessor_->initializePublishers(this);
     pRefDataProcessor_->setParameters(lidarTargetDetectionParams_);
@@ -310,11 +313,13 @@ bool ExtrinsicCameraLidarCalibration::initializeSubscribers(rclcpp::Node* ipNode
         return false;
 
     //--- subscribe to topics
-    imageSubsc_.subscribe(ipNode, srcTopicName_, "raw");
-    cloudSubsc_.subscribe(ipNode, refTopicName_);
+    imageSubsc_.subscribe(ipNode, srcTopicName_, "raw", rmw_qos_profile_default,
+                          sensorDataSubscriptionOptions());
+    cloudSubsc_.subscribe(*ipNode, refTopicName_, rclcpp::SensorDataQoS(),
+                          sensorDataSubscriptionOptions());
 
     //--- initialize synchronizers
-    if (useExactSync_)
+    if (syncPolicy_ == EXACT_SYNC)
     {
         pImgCloudExactSync_ =
           std::make_shared<message_filters::Synchronizer<ImgCloudExactSync>>(
@@ -322,6 +327,14 @@ bool ExtrinsicCameraLidarCalibration::initializeSubscribers(rclcpp::Node* ipNode
         pImgCloudExactSync_->registerCallback(
           std::bind(&ExtrinsicCameraLidarCalibration::onSensorDataReceived, this,
                     std::placeholders::_1, std::placeholders::_2));
+    }
+    else if (syncPolicy_ == LATEST_SYNC)
+    {
+        pImgCloudLatestSync_ =
+          std::make_shared<LatestMessageSync<InputImage_Message_T, InputCloud_Message_T>>(
+            imageSubsc_, cloudSubsc_,
+            std::bind(&ExtrinsicCameraLidarCalibration::onSensorDataReceived, this,
+                      std::placeholders::_1, std::placeholders::_2));
     }
     else
     {
@@ -367,6 +380,9 @@ bool ExtrinsicCameraLidarCalibration::onRequestCameraIntrinsics(
 {
     UNUSED_VAR(ipReq);
 
+    //--- get ownership of mutex
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
+
     lib3d::Intrinsics cameraIntr;
     if (!isInitialized_ || pSrcDataProcessor_ == nullptr)
         cameraIntr = lib3d::Intrinsics();
@@ -403,6 +419,8 @@ bool ExtrinsicCameraLidarCalibration::onRequestRemoveObservation(
   const std::shared_ptr<interf::srv::RemoveLastObservation::Request> ipReq,
   std::shared_ptr<interf::srv::RemoveLastObservation::Response> opRes)
 {
+    //--- get ownership of mutex
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
 
     if (ExtrinsicCalibrationBase<CameraDataProcessor, LidarDataProcessor>::onRequestRemoveObservation(ipReq, opRes))
     {
@@ -413,6 +431,8 @@ bool ExtrinsicCameraLidarCalibration::onRequestRemoveObservation(
             pRefDataProcessor_->setPreprocFilter(pFrustumCullingFilters_.back());
         else if (pFrustumCullingFilters_.size() == 0 && pRefDataProcessor_)
             pRefDataProcessor_->setPreprocFilter(nullptr);
+
+        ExtrinsicCalibrationBase::publishLastCalibrationResult();
     }
     else
         return false;
@@ -443,7 +463,7 @@ void ExtrinsicCameraLidarCalibration::onSensorDataReceived(
     }
 
     //--- get ownership of mutex
-    std::lock_guard<std::mutex> guard(dataProcessingMutex_);
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
 
     //--- convert input messages to data
     bool isConversionSuccessful = true;
@@ -631,9 +651,9 @@ bool ExtrinsicCameraLidarCalibration::saveCalibrationSettingsToWorkspace()
     pCalibSettings->setValue("misc/sync_queue_size",
                              QVariant::fromValue(syncQueueSize_));
 
-    //--- exact sync
-    pCalibSettings->setValue("misc/use_exact_sync",
-                             QVariant::fromValue(useExactSync_));
+    //--- sync policy
+    pCalibSettings->setValue("misc/sync_policy",
+                             QString::fromStdString(SYNC_POLICY_2_STR.at(syncPolicy_)));
 
     //--- sync settings file
     pCalibSettings->sync();
@@ -674,14 +694,15 @@ void ExtrinsicCameraLidarCalibration::setupLaunchParameters(rclcpp::Node* ipNode
     ipNode->declare_parameter<int>("sync_queue_size", DEFAULT_SYNC_QUEUE_SIZE,
                                    syncQueueDesc);
 
-    //--- exact sync
-    auto exactSyncDesc = rcl_interfaces::msg::ParameterDescriptor{};
-    exactSyncDesc.description =
-      "Set to true if an exact time synchronization between the camera image messages and the "
-      "LiDAR cloud messages.\n"
-      "Default: false";
-    syncQueueDesc.read_only = true;
-    ipNode->declare_parameter<bool>("use_exact_sync", false, exactSyncDesc);
+    //--- sync policy
+    auto syncPolicyDesc = rcl_interfaces::msg::ParameterDescriptor{};
+    syncPolicyDesc.description =
+      "Synchronization of the camera image messages and the LiDAR cloud messages: 'exact' "
+      "(exact time), 'approximate' (approximate time) or 'latest' (no time synchronization, each "
+      "image is paired with the latest cloud).\n"
+      "Default: approximate";
+    syncPolicyDesc.read_only = true;
+    ipNode->declare_parameter<std::string>("sync_policy", DEFAULT_SYNC_POLICY_STR, syncPolicyDesc);
 }
 
 //==================================================================================================
@@ -709,8 +730,8 @@ bool ExtrinsicCameraLidarCalibration::readLaunchParameters(const rclcpp::Node* i
     syncQueueSize_ = CalibrationBase::readNumericLaunchParameter<int>(
       ipNode, "sync_queue_size", DEFAULT_SYNC_QUEUE_SIZE, 1, INT_MAX);
 
-    //--- exact sync
-    useExactSync_ = ipNode->get_parameter("use_exact_sync").as_bool();
+    //--- sync policy
+    syncPolicy_ = CalibrationBase::readSyncPolicyLaunchParameter(ipNode);
 
     return true;
 }
@@ -755,7 +776,7 @@ bool ExtrinsicCameraLidarCalibration::shutdownSubscribers()
         return false;
 
     //--- get ownership of mutex
-    std::lock_guard<std::mutex> guard(dataProcessingMutex_);
+    std::lock_guard<std::recursive_mutex> guard(dataProcessingMutex_);
 
     //--- unsubscribe subscribers
     imageSubsc_.unsubscribe();
